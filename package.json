@@ -1,0 +1,13 @@
+{
+  "name": "sehatify-monorepo",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev --workspace=api",
+    "dev:admin": "npm run dev --workspace=admin",
+    "dev:web": "npm run dev --workspace=web",
+    "install:all": "npm install"
+  }
+}
