@@ -1,51 +1,49 @@
-const bcrypt = require("bcrypt")
-const dbConnection = require("../config/database")
-const User = require("../models/User")
+// 1. Muat variabel dari .env di baris paling atas agar bisa dibaca
+import dotenv from 'dotenv';
+dotenv.config();
+
+// 2. Gunakan sintaks modern 'import' agar cocok dengan file lain
+import dbConnection from '../config/database';
+import User from '../models/User';
 
 async function createAdminUser() {
   try {
-    console.log("🔌 Connecting to database...")
-    await dbConnection.connect()
+    console.log("🔌 Connecting to database...");
+    await dbConnection.connect();
 
-    // Check if admin user already exists
-    const existingAdmin = await User.findOne({ email: "admin@sehatify.com" })
+    // Cek apakah admin sudah ada
+    const existingAdmin = await User.findOne({ email: "admin@sehatify.com" });
     
     if (existingAdmin) {
-      console.log("✅ Admin user already exists")
-      console.log("📧 Email: admin@sehatify.com")
-      console.log("🔑 Password: admin123")
-      return
+      console.log("✅ Admin user already exists");
+      console.log("📧 Email: admin@sehatify.com");
+      console.log("🔑 Password: admin123");
+      return;
     }
 
-    // Create admin user
-    const hashedPassword = await bcrypt.hash("admin123", 10)
-    
+    // 3. Hapus hashing manual. Biarkan model Mongoose yang bekerja.
     const adminUser = new User({
       name: "Administrator",
       email: "admin@sehatify.com",
-      password: hashedPassword,
-      role: "Super Admin",
+      password: "admin123", // Berikan password teks biasa
+      role: "Super Admin", // role ini ada di kode asli Anda
       status: "Active",
-    })
+    });
 
-    await adminUser.save()
+    await adminUser.save();
 
-    console.log("✅ Admin user created successfully!")
-    console.log("📧 Email: admin@sehatify.com")
-    console.log("🔑 Password: admin123")
-    console.log("👤 Role: Super Admin")
+    console.log("✅ Admin user created successfully!");
+    console.log("📧 Email: admin@sehatify.com");
+    console.log("🔑 Password: admin123");
+    console.log("👤 Role: Super Admin");
 
   } catch (error) {
-    console.error("❌ Error creating admin user:", error)
+    console.error("❌ Error creating admin user:", error);
   } finally {
-    await dbConnection.disconnect()
-    process.exit(0)
+    console.log("🔌 Disconnecting from database...");
+    await dbConnection.disconnect();
   }
 }
 
-// Run if called directly
-if (require.main === module) {
-  createAdminUser()
-}
-
-module.exports = createAdminUser
+// Langsung jalankan fungsi utama
+createAdminUser();

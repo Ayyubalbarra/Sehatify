@@ -1,13 +1,16 @@
-const dbConnection = require("../config/database");
-const Patient = require("../models/Patient");
-const Doctor = require("../models/Doctor");
-const Polyclinic = require("../models/Polyclinic");
-const Schedule = require("../models/Schedule");
-const Queue = require("../models/Queue");
-const Inventory = require("../models/Inventory");
-const Bed = require("../models/Bed");
-const Visit = require("../models/Visit");
-const User = require("../models/User");
+import dotenv from 'dotenv';
+dotenv.config();
+
+import dbConnection from "../config/database";
+import Patient from "../models/Patient";
+import Doctor from "../models/Doctor";
+import Polyclinic from "../models/Polyclinic";
+import Schedule from "../models/Schedule";
+import Queue from "../models/Queue";
+import Inventory from "../models/Inventory";
+import Bed from "../models/Bed";
+import Visit from "../models/Visit";
+import User from "../models/User";
 
 // Asumsi ModelHelpers ada dan berfungsi
 const ModelHelpers = {
@@ -46,16 +49,14 @@ class EnhancedDataSeeder {
 
   async createAdminUser() {
     try {
-      // ✅ PERBAIKAN: Hapus require('bcryptjs') karena hashing dilakukan oleh model
       const existingAdmin = await User.findOne({ email: "admin@sehatify.com" });
       if (!existingAdmin) {
         console.log("Mencoba membuat admin baru...");
 
-        // ✅ PERBAIKAN: Hapus hashing manual. Berikan password teks biasa.
         const adminUser = new User({
           name: "Administrator",
           email: "admin@sehatify.com",
-          password: "admin123", // Model akan meng-hash ini secara otomatis
+          password: "admin123",
           role: "admin"
         });
 
@@ -220,6 +221,8 @@ async function runSeeder() {
     const seeder = new EnhancedDataSeeder();
     await seeder.seedAll();
   } catch (error) {
+    // Error sudah dicatat di dalam seeder.seedAll() jika terjadi di sana
+    // jadi tidak perlu log lagi kecuali untuk error koneksi
     console.error("Seeding script failed:", error);
   } finally {
     console.log("🔌 Disconnecting from database...");
@@ -227,8 +230,5 @@ async function runSeeder() {
   }
 }
 
-if (require.main === module) {
-  runSeeder();
-}
-
-module.exports = EnhancedDataSeeder;
+// Jalankan skrip
+runSeeder();
