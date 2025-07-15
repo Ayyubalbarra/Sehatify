@@ -5,8 +5,11 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, LogIn } from 'lucide-react';
 import Button from '../components/Button';
 import Card from '../components/Card';
-import axios from 'axios'; 
-import toast from 'react-hot-toast'; // Impor toast untuk notifikasi
+// Hapus import axios, karena kita akan menggunakan AuthContext
+// import axios from 'axios'; 
+// Hapus import toast, karena AuthContext akan menanganinya
+// import toast from 'react-hot-toast'; 
+import { useAuth } from '../contexts/AuthContext'; // Impor useAuth
 
 const Login: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -15,8 +18,17 @@ const Login: React.FC = () => {
     password: ''
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [isLoading, setIsLoading] = useState(false); // Tambahkan loading state
+  // Hapus isLoading lokal, gunakan dari AuthContext
+  // const [isLoading, setIsLoading] = useState(false); 
   const navigate = useNavigate();
+  const { login, isLoading, isAuthenticated } = useAuth(); // Ambil login dan isLoading dari AuthContext
+
+  // Redirect jika sudah login
+  React.useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -51,34 +63,16 @@ const Login: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validateForm()) return; // Hentikan jika validasi gagal
+    if (!validateForm()) return;
 
-    setIsLoading(true); // Mulai loading
     try {
-      // Menggunakan process.env.VITE_APP_API_URL dari .env Vite
-      const API_BASE_URL = import.meta.env.VITE_APP_API_URL || 'http://localhost:5000/api/v1';
-      const response = await axios.post(
-        `${API_BASE_URL}/auth/patient/login`, 
-        {
-          email: formData.email,
-          password: formData.password,
-        }
-      );
-
-      localStorage.setItem('authToken', response.data.data.token);
-      localStorage.setItem('user', JSON.stringify(response.data.data.user));
-      toast.success(`Selamat datang, ${response.data.data.user.fullName || response.data.data.user.name || 'Pasien'}!`); // Notifikasi sukses
-      navigate('/dashboard'); // Arahkan ke dashboard pasien
-
-    } catch (err: any) {
-      if (axios.isAxiosError(err) && err.response) {
-        toast.error(err.response?.data.message || 'Login gagal.'); // Tampilkan error dari server
-      } else {
-        console.error('Login failed:', err);
-        toast.error('Terjadi kesalahan saat login.');
-      }
-    } finally {
-      setIsLoading(false); // Akhiri loading
+      await login(formData);
+      // Navigasi akan ditangani oleh useEffect atau oleh useAuth jika ada redirect internal
+      // navigate('/dashboard'); 
+    } catch (err) {
+      // Error handling sudah di AuthContext, tapi bisa tambahkan logika UI di sini jika perlu
+      console.error("Login failed:", err);
+      setErrors(prev => ({ ...prev, password: 'Email atau password salah.' })); // Pesan umum atau dari error spesifik jika diperlukan
     }
   };
 
@@ -166,8 +160,8 @@ const Login: React.FC = () => {
               </div>
             </div>
 
-            <Button type="submit" size="lg" className="w-full" disabled={isLoading}> {/* Tambahkan disabled */}
-              {isLoading ? 'Signing In...' : 'Sign In'} {/* Ubah teks button saat loading */}
+            <Button type="submit" size="lg" className="w-full" disabled={isLoading}>
+              {isLoading ? 'Signing In...' : 'Sign In'}
             </Button>
           </form>
 

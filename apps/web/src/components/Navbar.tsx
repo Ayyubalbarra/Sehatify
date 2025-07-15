@@ -1,11 +1,15 @@
+// apps/web/src/components/Navbar.tsx
+
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, X, Stethoscope } from 'lucide-react';
+import { Menu, X, Stethoscope, UserCircle, LogOut } from 'lucide-react'; // Tambah UserCircle, LogOut
 import Button from './Button';
+import { useAuth } from '../contexts/AuthContext'; // Impor useAuth
 
 const Navbar: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const location = useLocation();
+  const { user, isAuthenticated, logout } = useAuth(); // Ambil user, isAuthenticated, logout dari AuthContext
 
   const navItems = [
     { name: 'Home', path: '/' },
@@ -13,6 +17,13 @@ const Navbar: React.FC = () => {
     { name: 'Articles', path: '/articles' },
     { name: 'About Us', path: '/about' },
     { name: 'Contact', path: '/contact' }
+  ];
+
+  // Tambahkan item navigasi yang hanya terlihat saat user login
+  const loggedInNavItems = [
+    { name: 'Dashboard', path: '/dashboard' },
+    { name: 'Medical Records', path: '/medical-records' },
+    { name: 'AI Chatbot', path: '/chatbot' },
   ];
 
   const isActive = (path: string) => location.pathname === path;
@@ -46,20 +57,48 @@ const Navbar: React.FC = () => {
                 {item.name}
               </Link>
             ))}
+            {isAuthenticated && loggedInNavItems.map((item) => ( // Tampilkan ini jika sudah login
+              <Link
+                key={item.name}
+                to={item.path}
+                className={`transition-colors duration-200 font-medium ${
+                  isActive(item.path)
+                    ? 'text-primary'
+                    : 'text-text hover:text-primary'
+                }`}
+              >
+                {item.name}
+              </Link>
+            ))}
           </div>
 
-          {/* Desktop Auth Buttons */}
+          {/* Desktop Auth Buttons / User Info */}
           <div className="hidden md:flex items-center space-x-4">
-            <Link to="/login">
-              <Button variant="ghost" size="sm">
-                Login
-              </Button>
-            </Link>
-            <Link to="/register">
-              <Button size="sm" className="bg-medical-gradient hover:shadow-medical">
-                Register
-              </Button>
-            </Link>
+            {isAuthenticated ? (
+              <div className="flex items-center space-x-3">
+                <span className="text-text font-medium flex items-center">
+                  <UserCircle className="h-5 w-5 mr-1 text-primary" />
+                  Hello, {user?.fullName || user?.email || 'User'}! {/* Tampilkan nama user */}
+                </span>
+                <Button variant="ghost" size="sm" onClick={logout}>
+                  <LogOut className="h-4 w-4 mr-1" />
+                  Logout
+                </Button>
+              </div>
+            ) : (
+              <>
+                <Link to="/login">
+                  <Button variant="ghost" size="sm">
+                    Login
+                  </Button>
+                </Link>
+                <Link to="/register">
+                  <Button size="sm" className="bg-medical-gradient hover:shadow-medical">
+                    Register
+                  </Button>
+                </Link>
+              </>
+            )}
           </div>
 
           {/* Mobile Menu Button */}
@@ -91,19 +130,46 @@ const Navbar: React.FC = () => {
                   {item.name}
                 </Link>
               ))}
+              {isAuthenticated && loggedInNavItems.map((item) => ( // Tampilkan ini jika sudah login
+                <Link
+                  key={item.name}
+                  to={item.path}
+                  className={`block px-3 py-2 rounded-md text-base font-medium ${
+                    isActive(item.path)
+                      ? 'text-primary bg-secondary/50'
+                      : 'text-text hover:text-primary hover:bg-secondary/30'
+                  }`}
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  {item.name}
+                </Link>
+              ))}
               <div className="pt-4 pb-3 border-t border-primary/10">
-                <div className="flex items-center px-3 space-x-3">
-                  <Link to="/login" onClick={() => setIsMenuOpen(false)}>
-                    <Button variant="ghost" size="sm" className="w-full">
-                      Login
-                    </Button>
-                  </Link>
-                  <Link to="/register" onClick={() => setIsMenuOpen(false)}>
-                    <Button size="sm" className="w-full bg-medical-gradient">
-                      Register
-                    </Button>
-                  </Link>
-                </div>
+                {isAuthenticated ? (
+                  <div className="flex flex-col items-start px-3">
+                     <span className="text-text font-medium flex items-center mb-2">
+                       <UserCircle className="h-5 w-5 mr-1 text-primary" />
+                       Hello, {user?.fullName || user?.email || 'User'}!
+                     </span>
+                     <Button variant="ghost" size="sm" className="w-full justify-start" onClick={logout}>
+                       <LogOut className="h-4 w-4 mr-1" />
+                       Logout
+                     </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center px-3 space-x-3">
+                    <Link to="/login" onClick={() => setIsMenuOpen(false)}>
+                      <Button variant="ghost" size="sm" className="w-full">
+                        Login
+                      </Button>
+                    </Link>
+                    <Link to="/register" onClick={() => setIsMenuOpen(false)}>
+                      <Button size="sm" className="w-full bg-medical-gradient">
+                        Register
+                      </Button>
+                    </Link>
+                  </div>
+                )}
               </div>
             </div>
           </div>
