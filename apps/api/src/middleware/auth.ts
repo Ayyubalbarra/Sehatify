@@ -2,7 +2,7 @@
 
 import { type Request, type Response, type NextFunction } from 'express';
 import jwt, { type JwtPayload } from 'jsonwebtoken';
-import User, { type IUser } from '../models/User'; // Pastikan ini mengimpor model User
+import User, { type IUser } from '../models/User';
 
 // Interface untuk JWT payload yang di-decode
 interface CustomJwtPayload extends JwtPayload {
@@ -11,7 +11,7 @@ interface CustomJwtPayload extends JwtPayload {
 
 // Tipe kustom untuk Request yang sudah terotentikasi
 export interface AuthRequest extends Request {
-  user?: IUser; // req.user akan berisi seluruh dokumen user (admin/staf)
+  user?: IUser; 
 }
 
 // Middleware untuk memverifikasi token
@@ -44,7 +44,6 @@ export const authenticateToken = async (
       return;
     }
     
-    // Cari user berdasarkan ID dari token
     const user = await User.findById(decoded.userId).select('-password');
     
     if (!user || !user.isActive) {

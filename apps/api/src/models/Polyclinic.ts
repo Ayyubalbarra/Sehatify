@@ -1,3 +1,5 @@
+// apps/api/src/models/Polyclinic.ts
+
 import mongoose, { Document, Schema, Model } from 'mongoose';
 
 // Interface untuk properti Polyclinic
@@ -70,7 +72,7 @@ const polyclinicSchema: Schema<IPolyclinic> = new Schema(
     },
     assignedDoctors: [
       {
-        doctorId: { type: Schema.Types.ObjectId, ref: "Doctor" },
+        doctorId: { type: Schema.Types.ObjectId, ref: "User" }, // Ganti ref ke User
         schedule: [
           {
             day: String,

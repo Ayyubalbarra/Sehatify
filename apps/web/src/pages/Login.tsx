@@ -1,9 +1,12 @@
+// apps/web/src/pages/Login.tsx
+
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, LogIn } from 'lucide-react';
 import Button from '../components/Button';
 import Card from '../components/Card';
-import axios from 'axios'; // <-- 1. Impor axios
+import axios from 'axios'; 
+import toast from 'react-hot-toast'; // Impor toast untuk notifikasi
 
 const Login: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -12,6 +15,7 @@ const Login: React.FC = () => {
     password: ''
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isLoading, setIsLoading] = useState(false); // Tambahkan loading state
   const navigate = useNavigate();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -45,36 +49,36 @@ const Login: React.FC = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  // --- PERBAIKAN DI SINI ---
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (validateForm()) {
-      try {
-        // 2. Kirim data ke API login pasien
-        const response = await axios.post(
-          'http://localhost:5000/api/v1/patient/login', 
-          {
-            email: formData.email,
-            password: formData.password,
-          }
-        );
+    if (!validateForm()) return; // Hentikan jika validasi gagal
 
-        // 3. Simpan token dan data user (pasien) ke localStorage
-        localStorage.setItem('authToken', response.data.data.token);
-        localStorage.setItem('user', JSON.stringify(response.data.data.user));
-
-        // 4. Arahkan ke dashboard
-        navigate('/dashboard');
-
-      } catch (err: any) {
-        // 5. Tangani error dari server
-        if (axios.isAxiosError(err) && err.response) {
-          setErrors(prev => ({ ...prev, password: err.response?.data.message || 'Login gagal' }));
-        } else {
-          console.error('Login failed:', err);
-          setErrors(prev => ({ ...prev, password: 'Terjadi kesalahan pada server.' }));
+    setIsLoading(true); // Mulai loading
+    try {
+      // Menggunakan process.env.VITE_APP_API_URL dari .env Vite
+      const API_BASE_URL = import.meta.env.VITE_APP_API_URL || 'http://localhost:5000/api/v1';
+      const response = await axios.post(
+        `${API_BASE_URL}/auth/patient/login`, 
+        {
+          email: formData.email,
+          password: formData.password,
         }
+      );
+
+      localStorage.setItem('authToken', response.data.data.token);
+      localStorage.setItem('user', JSON.stringify(response.data.data.user));
+      toast.success(`Selamat datang, ${response.data.data.user.fullName || response.data.data.user.name || 'Pasien'}!`); // Notifikasi sukses
+      navigate('/dashboard'); // Arahkan ke dashboard pasien
+
+    } catch (err: any) {
+      if (axios.isAxiosError(err) && err.response) {
+        toast.error(err.response?.data.message || 'Login gagal.'); // Tampilkan error dari server
+      } else {
+        console.error('Login failed:', err);
+        toast.error('Terjadi kesalahan saat login.');
       }
+    } finally {
+      setIsLoading(false); // Akhiri loading
     }
   };
 
@@ -162,8 +166,8 @@ const Login: React.FC = () => {
               </div>
             </div>
 
-            <Button type="submit" size="lg" className="w-full">
-              Sign In
+            <Button type="submit" size="lg" className="w-full" disabled={isLoading}> {/* Tambahkan disabled */}
+              {isLoading ? 'Signing In...' : 'Sign In'} {/* Ubah teks button saat loading */}
             </Button>
           </form>
 

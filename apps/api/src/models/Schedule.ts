@@ -1,3 +1,5 @@
+// apps/api/src/models/Schedule.ts
+
 import mongoose, { Document, Schema, Model } from 'mongoose';
 
 // Interface untuk properti Schedule
@@ -27,7 +29,7 @@ export interface ISchedule extends Document {
 const scheduleSchema: Schema<ISchedule> = new Schema(
   {
     scheduleId: { type: String, unique: true, index: true },
-    doctorId: { type: Schema.Types.ObjectId, ref: "Doctor", required: true, index: true },
+    doctorId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true }, // Ganti ref ke User
     polyclinicId: { type: Schema.Types.ObjectId, ref: "Polyclinic", required: true, index: true },
     date: { type: Date, required: true, index: true },
     startTime: { type: String, required: true },
@@ -38,7 +40,7 @@ const scheduleSchema: Schema<ISchedule> = new Schema(
     appointments: [
       {
         appointmentId: String,
-        patientId: { type: Schema.Types.ObjectId, ref: "Patient" },
+        patientId: { type: Schema.Types.ObjectId, ref: "PatientUser" }, // Ganti ref ke PatientUser
         appointmentTime: String,
         status: {
           type: String,

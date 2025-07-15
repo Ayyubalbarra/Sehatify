@@ -3,14 +3,13 @@ dotenv.config();
 
 import dbConnection from "../config/database";
 import Patient from "../models/Patient";
-import Doctor from "../models/Doctor";
+import User from '../models/User'
 import Polyclinic from "../models/Polyclinic";
 import Schedule from "../models/Schedule";
 import Queue from "../models/Queue";
 import Inventory from "../models/Inventory";
 import Bed from "../models/Bed";
 import Visit from "../models/Visit";
-import User from "../models/User";
 
 // Asumsi ModelHelpers ada dan berfungsi
 const ModelHelpers = {

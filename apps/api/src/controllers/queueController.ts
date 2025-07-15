@@ -1,14 +1,18 @@
+// apps/api/src/controllers/queueController.ts
+
 import { Request, Response, NextFunction } from 'express';
 import { Server } from 'socket.io';
 import Queue from "../models/Queue";
 import Schedule from "../models/Schedule";
 import { AuthRequest } from '../middleware/auth';
-import { IQueue } from '../interfaces/IQueue'; // Pastikan Anda memiliki interface ini
+import { IQueue } from '../interfaces/IQueue'; 
+import PatientUser from '../models/patientUser.model'; // Impor PatientUser
+import User from '../models/User'; // Impor User (untuk dokter)
+import Polyclinic from '../models/Polyclinic'; // Impor Polyclinic
 
-// Tipe untuk hasil populate yang lebih spesifik
 interface PopulatedQueueForList {
     _id: string;
-    patientId: { name: string; } | null;
+    patientId: { fullName: string; } | null; // Ganti name ke fullName
     polyclinicId: { name: string; } | null;
     scheduleId: { startTime: string; } | null;
     status: string;
@@ -16,9 +20,8 @@ interface PopulatedQueueForList {
     queueNumber: number;
 }
 
-// Helper Functions dengan Tipe Data yang Lebih Aman
 function calculateWaitTime(createdAt: Date, status: string): number {
-  if (status === 'Completed' || status === 'Cancelled') return 0;
+  if (status === 'Completed' || status === 'Cancelled' || status === 'No Show') return 0; // Tambah No Show
   const now = new Date();
   const queueTime = new Date(createdAt);
   const diffInMinutes = Math.floor((now.getTime() - queueTime.getTime()) / (1000 * 60));
@@ -33,21 +36,19 @@ function transformStatus(status?: string): string {
 function formatAppointmentTime(schedule?: { startTime: string } | null): string {
   if (!schedule?.startTime) return 'N/A';
   try {
-    // Asumsi startTime adalah string jam seperti "08:00"
     return schedule.startTime;
   } catch (error) {
     return 'N/A';
   }
 }
 
-// Fungsi untuk mengambil dan memancarkan data antrian terbaru
 async function emitQueueUpdate(io: Server) {
   try {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
 
     const queues = await Queue.find({ queueDate: { $gte: todayStart } })
-      .populate("patientId", "name")
+      .populate("patientId", "fullName") // Ganti name ke fullName
       .populate("polyclinicId", "name")
       .populate("scheduleId", "startTime")
       .sort({ queueNumber: 1 })
@@ -56,7 +57,7 @@ async function emitQueueUpdate(io: Server) {
 
     const transformedQueues = queues.map(queue => ({
       id: queue._id.toString(),
-      patientName: queue.patientId?.name || 'Pasien Dihapus',
+      patientName: queue.patientId?.fullName || 'Pasien Dihapus',
       polyclinic: queue.polyclinicId?.name || 'Poli Dihapus',
       appointmentTime: formatAppointmentTime(queue.scheduleId),
       status: transformStatus(queue.status),
@@ -78,7 +79,7 @@ class QueueController {
       todayStart.setHours(0, 0, 0, 0);
       
       const queues = await Queue.find({ queueDate: { $gte: todayStart } })
-        .populate("patientId", "name")
+        .populate("patientId", "fullName")
         .populate("polyclinicId", "name")
         .populate("scheduleId", "startTime")
         .sort({ queueNumber: 1 })
@@ -87,7 +88,7 @@ class QueueController {
 
       const transformedQueues = queues.map(queue => ({
           id: queue._id.toString(),
-          patientName: queue.patientId?.name || 'Pasien Dihapus',
+          patientName: queue.patientId?.fullName || 'Pasien Dihapus',
           polyclinic: queue.polyclinicId?.name || 'Poli Dihapus',
           appointmentTime: formatAppointmentTime(queue.scheduleId),
           status: transformStatus(queue.status),
@@ -104,7 +105,7 @@ class QueueController {
   public async getQueueById(req: Request, res: Response, next: NextFunction) {
     try {
       const queue = await Queue.findById(req.params.id)
-        .populate("patientId", "name phone")
+        .populate("patientId", "fullName phone")
         .populate("doctorId", "name specialization")
         .populate("polyclinicId", "name")
         .populate("scheduleId", "date startTime endTime")
@@ -133,7 +134,11 @@ class QueueController {
             return res.status(400).json({ success: false, message: "Kuota untuk jadwal ini sudah penuh." });
         }
 
-        const lastQueue = await Queue.findOne({ scheduleId }).sort({ queueNumber: -1 });
+        // Cari antrean terakhir berdasarkan scheduleId dan tanggal (schedule.date)
+        const lastQueue = await Queue.findOne({ 
+          scheduleId, 
+          queueDate: schedule.date // Penting untuk memastikan nomor antrian unik per jadwal per hari
+        }).sort({ queueNumber: -1 });
         const queueNumber = (lastQueue?.queueNumber || 0) + 1;
 
         const queue = new Queue({
@@ -144,13 +149,15 @@ class QueueController {
             polyclinicId: schedule.polyclinicId,
             queueNumber,
             queueDate: schedule.date,
-            createdBy: req.user?._id,
+            appointmentTime: schedule.startTime, // Tambahkan appointmentTime dari schedule
+            createdBy: req.user?._id, // createdBy akan menjadi user admin jika admin yang membuat, atau patient user jika pasien sendiri
         });
         await queue.save();
 
         await Schedule.findByIdAndUpdate(scheduleId, { $inc: { bookedSlots: 1, availableSlots: -1 } });
         
-        await emitQueueUpdate(req.app.get("io"));
+        // Emit update (jika Socket.IO sudah diinisialisasi)
+        // await emitQueueUpdate(req.app.get("io"));
 
         res.status(201).json({ success: true, message: "Antrian berhasil dibuat.", data: queue.toObject() });
     } catch (error) {
@@ -167,7 +174,7 @@ class QueueController {
             return res.status(404).json({ success: false, message: "Antrian tidak ditemukan" });
         }
 
-        await emitQueueUpdate(req.app.get("io"));
+        // await emitQueueUpdate(req.app.get("io"));
 
         res.json({ success: true, message: "Status antrian diperbarui.", data: updatedQueue.toObject() });
     } catch (error) {
@@ -180,7 +187,7 @@ class QueueController {
         const queue = await Queue.findById(req.params.id);
         if (!queue) return res.status(404).json({ success: false, message: "Antrian tidak ditemukan" });
         
-        if (queue.status === "Completed" || queue.status === "Cancelled") {
+        if (queue.status === "Completed" || queue.status === "Cancelled" || queue.status === "No Show") { // Tambah No Show
             return res.status(400).json({ success: false, message: `Antrian sudah ${queue.status} dan tidak bisa dibatalkan.` });
         }
 
@@ -189,7 +196,7 @@ class QueueController {
         
         await Schedule.findByIdAndUpdate(queue.scheduleId, { $inc: { bookedSlots: -1, availableSlots: 1 } });
         
-        await emitQueueUpdate(req.app.get("io"));
+        // await emitQueueUpdate(req.app.get("io"));
 
         res.json({ success: true, message: "Antrian berhasil dibatalkan." });
     } catch (error) {

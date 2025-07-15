@@ -1,3 +1,5 @@
+// apps/admin/frontend/src/pages/DataPasien.tsx
+
 "use client"
 
 import type React from "react"
@@ -10,76 +12,81 @@ import MetricCard from "../components/Dashboard/MetricCard"
 import DataTable from "../components/DataTable/DataTable"
 import PatientModal from "../components/Modals/PatientModal"
 import type { PatientFormData } from "../components/Modals/PatientModal"
-// Hapus import CSS
-// import "./DataPages.css"
+import { patientAPI, type PatientData, type PatientsApiResponse, type PatientStatsApiResponse } from "../services/api" 
 
-interface Patient extends PatientFormData {
-  _id: string
-  lastVisit?: string
-  lifetimeValue?: number
-  status: "Active" | "Inactive"
+// Sesuaikan interface Patient dengan PatientData dari api.ts
+interface Patient extends PatientData {
+  // Hanya tambahkan properti khusus frontend jika ada
 }
 
 interface PatientStats {
   total: number
-  byGender: { male: number; female: number }
-  trend: string
+  byGender: { male: number; female: number } 
+  trend: string 
   newThisWeek: number
-}
-
-interface PatientsApiResponse {
-  success: boolean
-  data: {
-    patients: Patient[]
-    stats: PatientStats
-    pagination: { currentPage: number; totalPages: number; totalItems: number }
-  }
-}
-
-const mockPatientsData: PatientsApiResponse = {
-  success: true,
-  data: {
-    patients: [
-      { _id: "1", patientId: "P001", name: "Rina Singh", nik: "3201234567890123", dateOfBirth: "1990-05-15", gender: "Perempuan", phone: "081234567890", email: "rina@gmail.com", address: { street: "Jl. Merdeka No. 123", city: "Jakarta", province: "DKI Jakarta", postalCode: "12345" }, bloodType: "A+", allergies: [], emergencyContact: { name: "John Singh", relationship: "Suami", phone: "081234567891" }, lastVisit: "2024-01-15", lifetimeValue: 1200000, status: "Active" },
-      { _id: "2", patientId: "P002", name: "Michael Thompson", nik: "3201234567890124", dateOfBirth: "1985-08-22", gender: "Laki-laki", phone: "081234567892", email: "michael@gmail.com", address: { street: "Jl. Sudirman No. 456", city: "Jakarta", province: "DKI Jakarta", postalCode: "12346" }, bloodType: "B+", allergies: ["Penicillin"], emergencyContact: { name: "Sarah Thompson", relationship: "Istri", phone: "081234567893" }, lastVisit: "2024-01-12", lifetimeValue: 2500000, status: "Active" },
-    ],
-    stats: { total: 1247, byGender: { male: 623, female: 624 }, trend: "+15.3%", newThisWeek: 47 },
-    pagination: { currentPage: 1, totalPages: 125, totalItems: 1247 },
-  },
 }
 
 const DataPasien: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState("")
-  const [filterStatus, setFilterStatus] = useState("all")
+  const [filterStatus, setFilterStatus] = useState("all") // 'all', 'Active', 'Inactive'
   const [showModal, setShowModal] = useState(false)
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
-  const pageSize = 10
+  const pageSize = 10 
 
   const queryClient = useQueryClient()
 
-  const { data: patientsData, isLoading } = useQuery<PatientsApiResponse>({
-    queryKey: ["patients", currentPage, searchTerm, filterStatus],
-    queryFn: async () => mockPatientsData, // Ganti dengan fetch API Anda
-    initialData: mockPatientsData,
+  const { data: patientsResponse, isLoading: isLoadingPatients } = useQuery<PatientsApiResponse>({
+    queryKey: ["patients", currentPage, searchTerm, filterStatus, pageSize], 
+    queryFn: () => patientAPI.getPatients(currentPage, pageSize, searchTerm, filterStatus),
+  })
+
+  const { data: statsResponse, isLoading: isLoadingStats } = useQuery<PatientStatsApiResponse>({
+    queryKey: ["patientStats"],
+    queryFn: () => patientAPI.getPatientStats(),
   })
 
   const deleteMutation = useMutation({
-    mutationFn: async (patientId: string) => { await new Promise(resolve => setTimeout(resolve, 1000)); return { success: true } },
-    onSuccess: () => { toast.success("Pasien berhasil dihapus"); queryClient.invalidateQueries({ queryKey: ["patients"] }) },
-    onError: (error: Error) => { toast.error(`Gagal: ${error.message}`) },
+    mutationFn: async (patientId: string) => patientAPI.deletePatient(patientId), 
+    onSuccess: () => { 
+      toast.success("Pasien berhasil dihapus"); 
+      queryClient.invalidateQueries({ queryKey: ["patients"] }); 
+      queryClient.invalidateQueries({ queryKey: ["patientStats"] }); 
+    },
+    onError: (error: any) => { 
+      const message = error.response?.data?.message || error.message || "Gagal menghapus pasien";
+      toast.error(message); 
+    },
   })
 
-  const data = patientsData?.data || mockPatientsData.data
-  const stats = data?.stats || mockPatientsData.data.stats
+  const patients = patientsResponse?.data || []
+  const paginationData = patientsResponse?.pagination || { currentPage: 1, totalPages: 1, total: 0 }
+
+  const totalPatients = statsResponse?.data?.total || 0;
+  const newPatientsThisMonth = statsResponse?.data?.new || 0;
+  
+  const genderStats = statsResponse?.data?.genderStats || [];
+  const maleCount = genderStats.find(g => g._id === 'Laki-laki')?.count || 0;
+  const femaleCount = genderStats.find(g => g._id === 'Perempuan')?.count || 0;
+  const totalGenderCount = maleCount + femaleCount;
+
+  const displayStats: PatientStats = {
+    total: totalPatients,
+    byGender: { 
+      male: maleCount, 
+      female: femaleCount 
+    },
+    trend: "+15.3%", 
+    newThisWeek: newPatientsThisMonth, 
+  };
 
   const columns = [
-    { key: "name", label: "Pasien", render: (patient: Patient) => (
+    { key: "fullName", label: "Pasien", render: (patient: Patient) => ( // Ganti key "name" ke "fullName"
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md bg-blue-100 text-sm font-semibold text-blue-600">{patient.name.charAt(0)}</div>
+          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md bg-blue-100 text-sm font-semibold text-blue-600">{patient.fullName.charAt(0)}</div>
           <div>
-            <div className="font-semibold text-slate-800">{patient.name}</div>
-            <div className="text-xs text-slate-500">ID: {patient.patientId}</div>
+            <div className="font-semibold text-slate-800">{patient.fullName}</div>
+            <div className="text-xs text-slate-500">ID: {patient._id}</div> {/* Gunakan _id */}
           </div>
         </div>
       ),
@@ -102,9 +109,9 @@ const DataPasien: React.FC = () => {
   ]
 
   const filterTabs = [
-    { key: "all", label: "Semua", count: stats.total },
-    { key: "active", label: "Aktif", count: Math.floor(stats.total * 0.8) },
-    { key: "inactive", label: "Tidak Aktif", count: Math.floor(stats.total * 0.2) },
+    { key: "all", label: "Semua", count: displayStats.total },
+    { key: "Active", label: "Aktif", count: statsResponse?.data?.active || 0 }, 
+    { key: "Inactive", label: "Tidak Aktif", count: displayStats.total - (statsResponse?.data?.active || 0) }, 
   ]
 
   const handleView = (patient: Patient) => { setSelectedPatient(patient); setShowModal(true) }
@@ -112,7 +119,9 @@ const DataPasien: React.FC = () => {
   const handleDelete = (patientId: string) => { if (window.confirm("Apakah Anda yakin?")) { deleteMutation.mutate(patientId) } }
   const handleAddNew = () => { setSelectedPatient(null); setShowModal(true) }
 
-  if (isLoading && !patientsData) {
+  const isLoading = isLoadingPatients || isLoadingStats;
+
+  if (isLoading && !patientsResponse && !statsResponse) {
     return <div className="flex h-full items-center justify-center p-10"><Loader2 className="h-8 w-8 animate-spin text-blue-600" /></div>
   }
 
@@ -130,16 +139,21 @@ const DataPasien: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        <MetricCard title="Total Pasien" value={stats.total} icon={Users} color="blue" trend="up" trendValue={stats.trend} />
-        <MetricCard title="Pasien Baru (Minggu Ini)" value={stats.newThisWeek} icon={UserPlus} color="green" />
-        <MetricCard title="Distribusi Gender" value={`${Math.round((stats.byGender.female / stats.total) * 100)}% P`} description={`${stats.byGender.male} L`} icon={Activity} color="purple" />
+        <MetricCard title="Total Pasien" value={displayStats.total} icon={Users} color="blue" trend="up" trendValue={displayStats.trend} />
+        <MetricCard title="Pasien Baru (Minggu Ini)" value={displayStats.newThisWeek} icon={UserPlus} color="green" />
+        <MetricCard title="Distribusi Gender" 
+          value={`${totalGenderCount > 0 ? Math.round((femaleCount / totalGenderCount) * 100) : 0}% P`} 
+          description={`${maleCount} L`} 
+          icon={Activity} 
+          color="purple" 
+        />
       </div>
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-col gap-4 p-4 md:flex-row md:items-center md:justify-between">
           <div className="flex-1">
             <h2 className="text-lg font-semibold text-slate-800">Daftar Pasien</h2>
-            <p className="text-sm text-slate-500">{stats.total} pasien terdaftar di sistem.</p>
+            <p className="text-sm text-slate-500">{displayStats.total} pasien terdaftar di sistem.</p>
           </div>
           <div className="flex items-center gap-2">
             <div className="relative w-full md:w-64">
@@ -166,19 +180,19 @@ const DataPasien: React.FC = () => {
 
         <DataTable
           columns={columns}
-          data={data.patients || []}
-          loading={isLoading}
+          data={patients} 
+          loading={isLoadingPatients} 
           pagination={{
-            currentPage,
-            totalPages: data.pagination?.totalPages || 1,
-            totalItems: data.pagination?.totalItems || 0,
+            currentPage: paginationData.currentPage,
+            totalPages: paginationData.totalPages,
+            totalItems: paginationData.total, 
             onPageChange: setCurrentPage,
           }}
         />
       </div>
 
       {showModal && (
-        <PatientModal patient={selectedPatient || undefined} onClose={() => setShowModal(false)} onSave={() => { setShowModal(false); queryClient.invalidateQueries({ queryKey: ["patients"] }) }} />
+        <PatientModal patient={selectedPatient || undefined} onClose={() => setShowModal(false)} onSave={() => { setShowModal(false); queryClient.invalidateQueries({ queryKey: ["patients"] }); queryClient.invalidateQueries({ queryKey: ["patientStats"] }); }} />
       )}
     </div>
   )

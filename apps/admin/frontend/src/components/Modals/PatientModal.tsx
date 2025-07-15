@@ -1,169 +1,141 @@
-"use client"
+// apps/admin/frontend/src/components/Modals/PatientModal.tsx
+// ATAU apps/admin/frontend/src/types/index.ts (jika PatientFormData didefinisikan di sana)
 
-import React, { useState, useEffect } from "react"
-import { X, Save, User } from "lucide-react"
-import { useMutation, useQueryClient } from "@tanstack/react-query"
-import toast from "react-hot-toast"
+// Contoh kerangka PatientModal.tsx (Anda perlu menyesuaikan dengan isi file Anda)
+import React, { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { patientAPI } from '../../services/api'; // Pastikan path ini benar
 
-
-// --- PERBAIKAN 1: Definisikan dan ekspor tipe data yang jelas ---
+// **PERBAIKAN PENTING DI SINI**
 export interface PatientFormData {
-  patientId?: string;
-  name: string;
-  nik: string;
-  dateOfBirth: string;
-  gender: "Laki-laki" | "Perempuan";
-  phone: string;
+  // Properti yang WAJIB diisi saat membuat/mengedit dari form
+  fullName: string; // Ganti dari 'name' ke 'fullName'
   email: string;
-  address: {
-    street: string;
-    city: string;
-    province: string;
-    postalCode: string;
+  phone: string;
+  dateOfBirth: string; // Asumsi string (misal "YYYY-MM-DD")
+  gender: 'Laki-laki' | 'Perempuan';
+
+  // Properti opsional
+  nik?: string; // Opsional, jika Anda tidak mewajibkannya di form atau tidak ada di PatientUser
+  address?: { 
+    street?: string; 
+    city?: string;   
+    province?: string; 
+    postalCode?: string; 
   };
-  bloodType: string;
-  allergies: string[];
-  emergencyContact: {
-    name: string;
-    relationship: string;
-    phone: string;
+  bloodType?: 'A+' | 'A-' | 'B+' | 'B-' | 'AB+' | 'AB-' | 'O+' | 'O-';
+  allergies?: string[];
+  emergencyContact?: {
+    name?: string;
+    relationship?: string;
+    phone?: string;
   };
+  // Properti yang biasanya tidak diubah via modal ini, tapi mungkin ada di data
+  _id?: string; // Untuk mode edit, pasien akan memiliki _id
+  patientId?: string; // Jika Anda masih menggunakan ini sebagai identifikasi lain
+  status?: 'Active' | 'Inactive'; // Jika ingin mengedit status pasien
 }
 
 interface PatientModalProps {
-  patient?: Partial<PatientFormData>; // Gunakan Partial karena data mungkin tidak lengkap
+  patient?: PatientFormData; // Menggunakan PatientFormData yang sudah diubah
   onClose: () => void;
-  onSave: () => void;
+  onSave: () => void; // Fungsi yang dipanggil setelah simpan berhasil
 }
 
 const PatientModal: React.FC<PatientModalProps> = ({ patient, onClose, onSave }) => {
-  const queryClient = useQueryClient();
-
-  const [formData, setFormData] = useState<PatientFormData>({
-    name: "",
-    nik: "",
-    dateOfBirth: "",
-    gender: "Laki-laki",
-    phone: "",
-    email: "",
-    address: { street: "", city: "", province: "", postalCode: "" },
-    bloodType: "",
-    allergies: [],
-    emergencyContact: { name: "", relationship: "", phone: "" },
+  const [formData, setFormData] = useState<PatientFormData>(patient || {
+    fullName: '',
+    email: '',
+    phone: '',
+    dateOfBirth: '',
+    gender: 'Laki-laki',
+    address: {}, // Inisialisasi sebagai objek kosong
+    // ... inisialisasi properti opsional lainnya jika perlu
   });
+  const [isLoading, setIsLoading] = useState(false);
+  const isEditMode = !!patient?._id; // Tentukan mode edit/tambah berdasarkan adanya _id
 
-  useEffect(() => {
-    if (patient) {
-      setFormData({
-        name: patient.name || "",
-        nik: patient.nik || "",
-        dateOfBirth: patient.dateOfBirth ? new Date(patient.dateOfBirth).toISOString().split("T")[0] : "",
-        gender: patient.gender || "Laki-laki",
-        phone: patient.phone || "",
-        email: patient.email || "",
-        address: {
-          street: patient.address?.street || "",
-          city: patient.address?.city || "",
-          province: patient.address?.province || "",
-          postalCode: patient.address?.postalCode || "",
-        },
-        bloodType: patient.bloodType || "",
-        allergies: patient.allergies || [],
-        emergencyContact: {
-          name: patient.emergencyContact?.name || "",
-          relationship: patient.emergencyContact?.relationship || "",
-          phone: patient.emergencyContact?.phone || "",
-        },
-      });
-    }
-  }, [patient]);
-
-  const saveMutation = useMutation({
-    mutationFn: async (data: PatientFormData) => {
-      const url = patient?.patientId ? `/api/patients/${patient.patientId}` : "/api/patients";
-      const method = patient?.patientId ? "PUT" : "POST";
-
-      const response = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Gagal menyimpan data pasien");
-      }
-      return response.json();
-    },
+  // Implementasi useMutation untuk create dan update pasien
+  const createPatientMutation = useMutation({
+    mutationFn: (data: PatientFormData) => patientAPI.createPatient(data),
     onSuccess: () => {
-      toast.success(patient ? "Pasien berhasil diupdate" : "Pasien berhasil ditambahkan");
-      queryClient.invalidateQueries({ queryKey: ["patients"] }); // Refresh data tabel pasien
+      toast.success("Pasien berhasil ditambahkan!");
       onSave();
     },
-    onError: (error: Error) => {
-      toast.error(`Gagal: ${error.message}`);
-    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || "Gagal menambahkan pasien.");
+    }
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    saveMutation.mutate(formData);
+  const updatePatientMutation = useMutation({
+    mutationFn: (data: PatientFormData) => patientAPI.updatePatient(data._id as string, data),
+    onSuccess: () => {
+      toast.success("Data pasien berhasil diperbarui!");
+      onSave();
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || "Gagal memperbarui pasien.");
+    }
+  });
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    // Handle nested address properties
+    if (name.startsWith('address.')) {
+      const addressProp = name.split('.')[1];
+      setFormData(prev => ({
+        ...prev,
+        address: {
+          ...prev.address,
+          [addressProp]: value
+        }
+      }));
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
   };
 
-  // --- PERBAIKAN 2: Gunakan logika update state yang aman ---
-  const handleInputChange = (field: string, value: any) => {
-    const nameParts = field.split(".");
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
 
-    if (nameParts.length > 1) {
-      const [parent, child] = nameParts as [keyof PatientFormData, string];
-      setFormData((prev) => {
-        const parentObject = prev[parent];
-        const updatedParent =
-          typeof parentObject === "object" && parentObject !== null
-            ? { ...parentObject, [child]: value }
-            : { [child]: value };
-        return { ...prev, [parent]: updatedParent };
-      });
-    } else {
-      setFormData((prev) => ({ ...prev, [field]: value }));
+    try {
+      if (isEditMode) {
+        await updatePatientMutation.mutateAsync(formData);
+      } else {
+        await createPatientMutation.mutateAsync(formData);
+      }
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
-    <div className="modal-overlay">
-      <div className="modal-container large">
-        <div className="modal-header">
-          <div className="modal-title">
-            <User size={24} />
-            <h2>{patient ? "Edit Pasien" : "Tambah Pasien Baru"}</h2>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6">
+        <h2 className="text-xl font-semibold mb-4">{isEditMode ? "Edit Data Pasien" : "Tambah Pasien Baru"}</h2>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Contoh input field, sesuaikan dengan form Anda */}
+          <div>
+            <label htmlFor="fullName" className="block text-sm font-medium text-gray-700">Nama Lengkap</label>
+            <input type="text" name="fullName" id="fullName" value={formData.fullName} onChange={handleChange} required className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"/>
           </div>
-          <button className="modal-close" onClick={onClose}>
-            <X size={24} />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="modal-form">
-          {/* Seluruh elemen form Anda tidak perlu diubah. Saya hanya menyertakan satu contoh untuk kelengkapan. */}
-          <div className="form-grid">
-            <div className="form-group">
-              <label>Nama Lengkap *</label>
-              <input
-                type="text"
-                value={formData.name}
-                onChange={(e) => handleInputChange("name", e.target.value)}
-                required
-              />
-            </div>
-            {/* ... Tambahkan semua input form Anda yang lain di sini ... */}
+          <div>
+            <label htmlFor="email" className="block text-sm font-medium text-gray-700">Email</label>
+            <input type="email" name="email" id="email" value={formData.email} onChange={handleChange} required className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"/>
           </div>
-
-          <div className="modal-actions">
-            <button type="button" className="secondary-btn" onClick={onClose}>
-              Batal
-            </button>
-            <button type="submit" className="primary-btn" disabled={saveMutation.isPending}>
-              <Save size={20} />
-              {saveMutation.isPending ? "Menyimpan..." : "Simpan"}
+          {/* Input untuk address */}
+          <div>
+            <label htmlFor="address.street" className="block text-sm font-medium text-gray-700">Jalan</label>
+            <input type="text" name="address.street" id="address.street" value={formData.address?.street || ''} onChange={handleChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"/>
+          </div>
+          {/* Tambahkan input lainnya sesuai PatientFormData */}
+          
+          <div className="flex justify-end gap-3 mt-6">
+            <button type="button" onClick={onClose} className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">Batal</button>
+            <button type="submit" disabled={isLoading || createPatientMutation.isPending || updatePatientMutation.isPending} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50">
+              {isLoading ? 'Menyimpan...' : 'Simpan'}
             </button>
           </div>
         </form>

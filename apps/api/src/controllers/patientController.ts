@@ -1,8 +1,9 @@
+// apps/api/src/controllers/patientController.ts
+
 import { type Request, type Response, type NextFunction } from 'express';
-import Patient, { type IPatient } from "../models/Patient";
-import Visit from "../models/Visit";
-import Queue from "../models/Queue";
-// PERBAIKAN: Mengimpor semua helper yang dibutuhkan dari modelHelpers
+import PatientUser from "../models/patientUser.model";
+import Visit from "../models/Visit"; // Asumsi ada model Visit
+import Queue from "../models/Queue"; // Asumsi ada model Queue
 import { validateNIK, calculateAge } from "../utils/modelHelpers";
 
 // Definisikan tipe untuk query parameter agar lebih aman
@@ -13,6 +14,12 @@ interface PatientQuery {
   status?: string;
 }
 
+// Tipe untuk hasil populate yang lebih spesifik
+interface IPatientPopulated extends PatientUser { // Sesuaikan dengan IPatientUser
+  // tambahkan properti yang di-populate jika ada
+}
+
+
 class PatientController {
   // Get all patients with filtering and pagination
   async getPatients(req: Request<{}, {}, {}, PatientQuery>, res: Response, next: NextFunction) {
@@ -22,12 +29,14 @@ class PatientController {
 
       if (search) {
         query.$or = [
-          { name: { $regex: search, $options: "i" } },
-          { patientId: { $regex: search, $options: "i" } }
+          { fullName: { $regex: search, $options: "i" } }, // Ganti 'name' ke 'fullName'
+          { patientId: { $regex: search, $options: "i" } } // Jika patientId ada di PatientUser
         ];
       }
       if (status && status !== "all") {
-        query.status = status;
+        // Asumsi PatientUser punya field status
+        // Jika tidak, Anda perlu cara lain untuk memfilter status
+        // query.status = status; 
       }
       
       const pageNum = Number(page);
@@ -35,17 +44,17 @@ class PatientController {
 
       const [patients, total] = await Promise.all([
         Patient.find(query)
-          .sort({ registrationDate: -1 })
+          .sort({ createdAt: -1 }) // Urutkan berdasarkan createdAt
           .limit(limitNum)
           .skip((pageNum - 1) * limitNum)
-          .lean<IPatient[]>(), // Menggunakan .lean() memastikan hasil adalah objek biasa
+          .lean<IPatientPopulated[]>(), 
         Patient.countDocuments(query),
       ]);
       
       // Menambahkan properti 'age' ke setiap objek pasien
       const patientsWithAge = patients.map(p => ({
         ...p, 
-        age: calculateAge(p.dateOfBirth) // <-- PERBAIKAN: Fungsi helper sekarang dikenali
+        age: calculateAge(p.dateOfBirth) 
       }));
 
       res.json({ 
@@ -66,12 +75,13 @@ class PatientController {
   async getPatient(req: Request<{ patientId: string }>, res: Response, next: NextFunction) {
     try {
         const { patientId } = req.params;
-        const patient = await Patient.findOne({ patientId }).lean<IPatient>();
+        const patient = await Patient.findOne({ _id: patientId }).lean<IPatientPopulated>(); // Cari berdasarkan _id
         
         if (!patient) {
             return res.status(404).json({ success: false, message: "Pasien tidak ditemukan" });
         }
         
+        // Asumsi Visit model memiliki field patientId yang merujuk ke _id PatientUser
         const recentVisits = await Visit.find({ patientId: patient._id }).sort({ visitDate: -1 }).limit(5).lean();
         const lifetimeValue = recentVisits.reduce((sum, visit) => sum + (visit.totalCost || 0), 0);
 
@@ -94,9 +104,12 @@ class PatientController {
     try {
       const [totalPatients, activePatients, newPatients, genderStats] = await Promise.all([
         Patient.countDocuments(),
-        Patient.countDocuments({ status: "Active" }),
-        Patient.countDocuments({ registrationDate: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } }),
-        Patient.aggregate([{ $group: { _id: "$gender", count: { $sum: 1 } } }]),
+        // Jika PatientUser tidak punya status, ini perlu logika lain
+        Patient.countDocuments({ /* status: "Active" */ }), 
+        Patient.countDocuments({ createdAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } }),
+        Patient.aggregate([
+          { $group: { _id: "$gender", count: { $sum: 1 } } }
+        ]),
       ]);
 
       res.json({
@@ -111,13 +124,16 @@ class PatientController {
   // Create a new patient
   async createPatient(req: Request, res: Response, next: NextFunction) {
     try {
-      const { nik } = req.body;
-      if (!validateNIK(nik)) { // <-- PERBAIKAN: Fungsi helper sekarang dikenali
-        return res.status(400).json({ success: false, message: "Format NIK tidak valid" });
-      }
-      const existingPatient = await Patient.findOne({ nik }).lean();
+      // NIK tidak ada di PatientUser.model.ts yang diberikan sebelumnya.
+      // Jika Anda ingin menggunakan NIK, tambahkan ke PatientUser model.
+      // const { nik } = req.body;
+      // if (!validateNIK(nik)) { 
+      //   return res.status(400).json({ success: false, message: "Format NIK tidak valid" });
+      // }
+      const { email } = req.body;
+      const existingPatient = await Patient.findOne({ email: email.toLowerCase() }).lean();
       if (existingPatient) {
-        return res.status(400).json({ success: false, message: "NIK sudah terdaftar" });
+        return res.status(400).json({ success: false, message: "Email sudah terdaftar" });
       }
 
       const patient = new Patient(req.body);
@@ -131,7 +147,8 @@ class PatientController {
   // Update a patient's data
   async updatePatient(req: Request, res: Response, next: NextFunction) {
     try {
-      const patient = await Patient.findOneAndUpdate({ patientId: req.params.patientId }, req.body, { new: true, runValidators: true }).lean();
+      // Update berdasarkan _id, bukan patientId string
+      const patient = await Patient.findByIdAndUpdate(req.params.patientId, req.body, { new: true, runValidators: true }).lean();
       if (!patient) {
         return res.status(404).json({ success: false, message: "Pasien tidak ditemukan" });
       }
@@ -141,10 +158,10 @@ class PatientController {
     }
   }
 
-  // Delete a patient
+  // Delete a patient (soft delete jika ada status)
   async deletePatient(req: Request, res: Response, next: NextFunction) {
     try {
-      const patient = await Patient.findOne({ patientId: req.params.patientId }).lean();
+      const patient = await Patient.findById(req.params.patientId).lean(); // Cari berdasarkan _id
       if (!patient) {
         return res.status(404).json({ success: false, message: "Pasien tidak ditemukan" });
       }
@@ -158,7 +175,7 @@ class PatientController {
         return res.status(400).json({ success: false, message: "Tidak dapat menghapus pasien dengan kunjungan atau antrian aktif" });
       }
 
-      await Patient.findOneAndDelete({ patientId: req.params.patientId });
+      await Patient.findByIdAndDelete(req.params.patientId); // Hapus berdasarkan _id
       res.json({ success: true, message: "Pasien berhasil dihapus" });
     } catch (error) {
       next(error);

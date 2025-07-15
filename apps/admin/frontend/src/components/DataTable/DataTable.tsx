@@ -1,9 +1,9 @@
+// apps/admin/frontend/src/components/DataTable/DataTable.tsx
+
 "use client"
 
 import type React from "react"
 import { ChevronLeft, ChevronRight, Loader2, Info } from "lucide-react"
-// Hapus import CSS
-// import "./DataTable.css"
 
 interface Column {
   key: string
@@ -91,7 +91,7 @@ const DataTable: React.FC<DataTableProps> = ({ columns, data, loading, paginatio
           </thead>
           <tbody className="divide-y divide-slate-200 bg-white">
             {data.map((item, index) => (
-              <tr key={item._id || index} className="transition-colors hover:bg-slate-50/50">
+              <tr key={item._id || item.id || index} className="transition-colors hover:bg-slate-50/50"> {/* Tambah item.id untuk fallback */}
                 {columns.map((column) => (
                   <td key={column.key} className="whitespace-nowrap px-6 py-4">
                     {column.render ? column.render(item) : item[column.key]}

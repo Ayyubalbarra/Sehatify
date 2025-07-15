@@ -1,3 +1,5 @@
+// apps/api/src/models/Queue.ts
+
 import mongoose, { Document, Schema, Model } from 'mongoose';
 
 // Interface untuk properti Queue
@@ -27,8 +29,8 @@ export interface IQueue extends Document {
 const queueSchema: Schema<IQueue> = new Schema(
   {
     queueId: { type: String, unique: true, index: true },
-    patientId: { type: Schema.Types.ObjectId, ref: "Patient", required: true, index: true },
-    doctorId: { type: Schema.Types.ObjectId, ref: "Doctor", required: true, index: true },
+    patientId: { type: Schema.Types.ObjectId, ref: "PatientUser", required: true, index: true }, // Ganti ref ke PatientUser
+    doctorId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true }, // Ganti ref ke User
     polyclinicId: { type: Schema.Types.ObjectId, ref: "Polyclinic", required: true, index: true },
     scheduleId: { type: Schema.Types.ObjectId, ref: "Schedule", required: true },
     queueNumber: { type: Number, required: true },

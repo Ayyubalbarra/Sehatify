@@ -103,7 +103,6 @@ class PatientAuthController {
   }
 
   public async demoLogin(req: Request, res: Response): Promise<void> {
-    // Implementasi demo login untuk pasien (sesuaikan dengan data demo pasien yang Anda miliki)
     try {
       const demoPatient = await PatientUser.findOne({ email: 'patient@demo.com' }).select('+password'); 
       
@@ -127,31 +126,23 @@ class PatientAuthController {
     }
   }
 
-  // Implementasi getProfile, updateProfile, changePassword, logout, verifyToken untuk pasien
-  // Menggunakan `AuthRequest` jika Anda ingin middleware `authenticateToken` bekerja dengan pasien juga.
-  // Namun, disarankan membuat middleware autentikasi terpisah untuk pasien jika logikanya berbeda.
   public async getProfile(req: Request, res: Response): Promise<void> {
-    // Implementasi untuk mendapatkan profil pasien
     res.status(501).json({ success: false, message: "Not Implemented" });
   }
 
   public async updateProfile(req: Request, res: Response): Promise<void> {
-    // Implementasi untuk memperbarui profil pasien
     res.status(501).json({ success: false, message: "Not Implemented" });
   }
 
   public async changePassword(req: Request, res: Response): Promise<void> {
-    // Implementasi untuk mengubah password pasien
     res.status(501).json({ success: false, message: "Not Implemented" });
   }
 
   public async logout(req: Request, res: Response): Promise<void> {
-    // Implementasi untuk logout pasien
     res.status(501).json({ success: false, message: "Not Implemented" });
   }
 
   public async verifyToken(req: Request, res: Response): Promise<void> {
-    // Implementasi untuk memverifikasi token pasien
     res.status(501).json({ success: false, message: "Not Implemented" });
   }
 }

@@ -1,7 +1,11 @@
+// apps/api/src/controllers/doctorController.ts
+
 import { Request, Response, NextFunction } from 'express';
 import { validationResult, ValidationError } from 'express-validator';
 import User from "../models/User";
-import { Doctor, WorkSchedule } from "../interfaces/IDoctor"; // Asumsi interface dipindah ke file terpisah
+import Schedule from '../models/Schedule'; // Impor model Schedule
+import { IDoctor, WorkSchedule } from "../interfaces/IDoctor"; // Asumsi interface dipindah ke file terpisah
+import { ISchedule } from '../interfaces/IQueue'; // Impor ISchedule jika diperlukan
 
 // Interface lokal untuk request dan response
 interface DoctorQueryParams {
@@ -63,13 +67,13 @@ class DoctorController {
           .sort({ name: 1 })
           .limit(limitNum)
           .skip((pageNum - 1) * limitNum)
-          .lean(), // <-- .lean() memastikan objek yang dikembalikan bersih
+          .lean(),
         User.countDocuments(filter),
       ]);
 
-      const response: ApiResponse<Doctor[]> = {
+      const response: ApiResponse<IDoctor[]> = { // Ganti ke IDoctor[] untuk konsistensi
         success: true,
-        data: doctors as Doctor[], // <-- PERBAIKAN: Type assertion untuk memastikan kesesuaian
+        data: doctors as IDoctor[], 
         pagination: { 
           totalPages: Math.ceil(total / limitNum), 
           currentPage: pageNum, 
@@ -96,7 +100,7 @@ class DoctorController {
         return;
       }
 
-      res.json({ success: true, data: doctor as Doctor }); // <-- PERBAIKAN: Type assertion
+      res.json({ success: true, data: doctor as IDoctor }); 
     } catch (error) {
       next(error);
     }
@@ -132,7 +136,7 @@ class DoctorController {
       res.status(201).json({ 
         success: true, 
         message: "Dokter berhasil dibuat", 
-        data: doctorResponse as Doctor // <-- PERBAIKAN: Type assertion
+        data: doctorResponse as IDoctor 
       });
     } catch (error) {
       next(error);
@@ -160,14 +164,14 @@ class DoctorController {
         req.params.id, 
         req.body, 
         { new: true, runValidators: true }
-      ).select("-password").lean(); // <-- PERBAIKAN: Tambahkan .lean()
+      ).select("-password").lean(); 
 
       if (!doctor || doctor.role !== 'doctor') {
         res.status(404).json({ success: false, message: "Dokter tidak ditemukan" });
         return;
       }
 
-      res.json({ success: true, message: "Dokter berhasil diupdate", data: doctor as Doctor });
+      res.json({ success: true, message: "Dokter berhasil diupdate", data: doctor as IDoctor });
     } catch (error) {
       next(error);
     }
@@ -217,12 +221,56 @@ class DoctorController {
     }
   }
   
-  // Get and Update doctor's work schedule
+  // Implementasi Get doctor's available schedules
   async getDoctorSchedule(req: Request, res: Response, next: NextFunction): Promise<void> {
-    // ...
+    try {
+        const doctorId = req.params.id;
+        const { date, polyclinicId } = req.query; // Query params untuk filter
+
+        let query: any = { doctorId: doctorId, status: "Active", availableSlots: { $gt: 0 } };
+
+        if (date) {
+            // Pastikan format tanggal sesuai ISO 8601 YYYY-MM-DD untuk query database
+            const startOfDay = new Date(date as string);
+            startOfDay.setHours(0, 0, 0, 0);
+            const endOfDay = new Date(date as string);
+            endOfDay.setHours(23, 59, 59, 999);
+            query.date = { $gte: startOfDay, $lte: endOfDay };
+        } else {
+            // Jika tidak ada tanggal, hanya ambil jadwal yang akan datang
+            query.date = { $gte: new Date() };
+        }
+
+        if (polyclinicId) {
+            query.polyclinicId = polyclinicId;
+        }
+
+        // Ambil jadwal dari model Schedule
+        const schedules = await Schedule.find(query)
+                                        .populate('polyclinicId', 'name') // Ambil nama poli
+                                        .sort({ date: 1, startTime: 1 })
+                                        .lean();
+
+        // Anda bisa memfilter lebih lanjut jika ada jadwal yang sudah lewat waktu di hari yang sama
+        const filteredSchedules = schedules.filter(schedule => {
+            if (date && new Date(date as string).toDateString() === new Date().toDateString()) {
+                const [hour, minute] = schedule.startTime.split(':').map(Number);
+                const scheduleDateTime = new Date();
+                scheduleDateTime.setHours(hour, minute, 0, 0);
+                return scheduleDateTime > new Date(); // Hanya slot yang belum lewat
+            }
+            return true;
+        });
+
+        res.json({ success: true, data: filteredSchedules });
+    } catch (error) {
+        next(error);
+    }
   }
+
+  // Update doctor's work schedule (method ini mungkin lebih cocok untuk admin setting jadwal, bukan booking)
   async updateDoctorSchedule(req: Request, res: Response, next: NextFunction): Promise<void> {
-    // ...
+    res.status(501).json({ success: false, message: "Update Doctor Schedule not implemented yet or should be handled via admin." });
   }
 }
 

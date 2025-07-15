@@ -1,3 +1,5 @@
+// apps/web/src/pages/MedicalRecords.tsx
+
 import React, { useState } from 'react';
 import { 
   FileText, 
@@ -11,30 +13,19 @@ import {
   Heart,
   Thermometer,
   Weight,
-  Zap
+  Zap,
+  Loader2 // Tambahkan loader
 } from 'lucide-react';
 import Card from '../components/Card';
 import Button from '../components/Button';
 import MedicalRecordCard from '../components/MedicalRecordCard';
 import HealthTrendChart from '../components/charts/HealthTrendChart';
 import HealthMetricsChart from '../components/charts/HealthMetricsChart';
+import { useQuery } from '@tanstack/react-query'; // Impor useQuery
+import { medicalRecordAPI } from '../services/api'; // Impor medicalRecordAPI
 
-interface MedicalRecord {
-  id: string;
-  patientId: string;
-  visitDate: string;
-  doctorName: string;
-  diagnosis: string;
-  treatments: string[];
-  prescriptions: string[];
-  labResults?: {
-    bloodPressure: string;
-    heartRate: string;
-    temperature: string;
-    weight: string;
-  };
-  notes?: string;
-}
+// Menggunakan MedicalRecord interface dari types/index.ts
+import { MedicalRecord } from '../types';
 
 const MedicalRecords: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -42,75 +33,26 @@ const MedicalRecords: React.FC = () => {
   const [sortBy, setSortBy] = useState('date');
   const [selectedMetric, setSelectedMetric] = useState<'bloodPressure' | 'heartRate' | 'weight'>('bloodPressure');
 
-  // Enhanced medical records with lab results
-  const medicalRecords: MedicalRecord[] = [
-    {
-      id: '1',
-      patientId: '1',
-      visitDate: '2024-01-15',
-      doctorName: 'Dr. Sarah Johnson',
-      diagnosis: 'Hypertension',
-      treatments: ['Lifestyle modifications', 'Blood pressure monitoring', 'Regular exercise program'],
-      prescriptions: ['Lisinopril 10mg daily', 'Hydrochlorothiazide 25mg daily'],
-      labResults: {
-        bloodPressure: '140/90',
-        heartRate: '78 bpm',
-        temperature: '36.5°C',
-        weight: '75 kg'
-      },
-      notes: 'Patient shows improvement with medication. Continue current treatment plan and schedule follow-up in 3 months.'
-    },
-    {
-      id: '2',
-      patientId: '1',
-      visitDate: '2024-01-05',
-      doctorName: 'Dr. Michael Chen',
-      diagnosis: 'Tension headaches',
-      treatments: ['Stress management techniques', 'Physical therapy', 'Relaxation exercises'],
-      prescriptions: ['Ibuprofen 400mg as needed', 'Magnesium supplement 200mg daily'],
-      labResults: {
-        bloodPressure: '125/80',
-        heartRate: '72 bpm',
-        temperature: '36.8°C',
-        weight: '74.5 kg'
-      },
-      notes: 'Headaches likely stress-related. Recommend stress reduction techniques and regular sleep schedule.'
-    },
-    {
-      id: '3',
-      patientId: '1',
-      visitDate: '2023-12-20',
-      doctorName: 'Dr. Emily Rodriguez',
-      diagnosis: 'Annual physical examination',
-      treatments: ['Routine screening', 'Vaccinations', 'Health counseling'],
-      prescriptions: ['Multivitamin daily', 'Vitamin D3 1000IU daily'],
-      labResults: {
-        bloodPressure: '120/75',
-        heartRate: '68 bpm',
-        temperature: '36.6°C',
-        weight: '74 kg'
-      },
-      notes: 'Overall health is good. Continue healthy lifestyle habits. Next annual checkup scheduled.'
-    },
-    {
-      id: '4',
-      patientId: '1',
-      visitDate: '2023-11-10',
-      doctorName: 'Dr. James Wilson',
-      diagnosis: 'Diabetes Type 2 - Follow up',
-      treatments: ['Blood glucose monitoring', 'Dietary counseling', 'Exercise program'],
-      prescriptions: ['Metformin 500mg twice daily', 'Glucose test strips'],
-      labResults: {
-        bloodPressure: '130/85',
-        heartRate: '75 bpm',
-        temperature: '36.4°C',
-        weight: '76 kg'
-      },
-      notes: 'Blood sugar levels improving with medication and lifestyle changes. Continue current management plan.'
-    }
-  ];
+  // Mendapatkan patientId dari localStorage (asumsi user pasien sudah login)
+  const storedUser = localStorage.getItem('user');
+  const patientId = storedUser ? JSON.parse(storedUser)._id : null;
 
-  // Sample health trend data
+  // Query untuk mendapatkan Medical Records
+  const { data: medicalRecordsResponse, isLoading: isLoadingRecords } = useQuery({
+    queryKey: ['medicalRecords', patientId, searchTerm, sortBy],
+    queryFn: () => {
+      if (!patientId) return Promise.resolve({ success: true, data: [] }); // Jika tidak ada patientId, kembalikan kosong
+      return medicalRecordAPI.getPatientMedicalRecords(patientId, searchTerm, sortBy);
+    },
+    enabled: !!patientId, // Hanya jalankan query jika patientId ada
+    staleTime: 5 * 60 * 1000, 
+  });
+
+  const medicalRecords: MedicalRecord[] = medicalRecordsResponse?.data || [];
+  // Perlu diperhatikan: Saat ini medicalRecordAPI.getPatientMedicalRecords masih mock/placeholder.
+  // Anda perlu mengimplementasikan endpoint ini di backend.
+
+  // Sample health trend data (Ini masih mock karena data labResults tidak ada di model backend PatientUser)
   const healthTrendData = [
     { date: '2023-11', bloodPressureSystolic: 130, bloodPressureDiastolic: 85, heartRate: 75, weight: 76 },
     { date: '2023-12', bloodPressureSystolic: 120, bloodPressureDiastolic: 75, heartRate: 68, weight: 74 },
@@ -118,7 +60,7 @@ const MedicalRecords: React.FC = () => {
     { date: '2024-01', bloodPressureSystolic: 140, bloodPressureDiastolic: 90, heartRate: 78, weight: 75 },
   ];
 
-  // Health metrics data for charts
+  // Health metrics data for charts (Ini masih mock)
   const diagnosisData = [
     { name: 'Hypertension', value: 1, color: '#ef4444' },
     { name: 'Headaches', value: 1, color: '#f59e0b' },
@@ -150,17 +92,25 @@ const MedicalRecords: React.FC = () => {
     setExpandedRecord(expandedRecord === recordId ? null : recordId);
   };
 
-  // Calculate health statistics
   const totalVisits = medicalRecords.length;
   const uniqueDoctors = new Set(medicalRecords.map(r => r.doctorName)).size;
   const totalPrescriptions = medicalRecords.reduce((acc, record) => acc + record.prescriptions.length, 0);
   const recentVisit = medicalRecords.sort((a, b) => new Date(b.visitDate).getTime() - new Date(a.visitDate).getTime())[0];
 
+  if (isLoadingRecords) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+        <p className="ml-4 text-text-light">Memuat rekam medis...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
-        <div className="text-center mb-8">
+        <div className="text-center mb-12">
           <h1 className="text-4xl font-bold text-text mb-4">Medical Records</h1>
           <p className="text-lg text-text-light">Your complete medical history and health analytics</p>
         </div>
@@ -295,28 +245,27 @@ const MedicalRecords: React.FC = () => {
         {/* Medical Records List */}
         <div className="space-y-6">
           <h2 className="text-2xl font-bold text-text">Medical History</h2>
-          {filteredRecords.map((record) => (
-            <MedicalRecordCard
-              key={record.id}
-              record={record}
-              isExpanded={expandedRecord === record.id}
-              onToggle={() => toggleRecord(record.id)}
-            />
-          ))}
-        </div>
-
-        {/* No Records */}
-        {filteredRecords.length === 0 && (
-          <div className="text-center py-12">
-            <div className="bg-gray-100 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
-              <FileText className="h-8 w-8 text-gray-400" />
+          {filteredRecords.length > 0 ? (
+            filteredRecords.map((record) => (
+              <MedicalRecordCard
+                key={record.id} // Perlu dipastikan ada ID yang unik dari backend
+                record={record}
+                isExpanded={expandedRecord === record.id}
+                onToggle={() => toggleRecord(record.id)}
+              />
+            ))
+          ) : (
+            <div className="text-center py-12">
+              <div className="bg-gray-100 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
+                <FileText className="h-8 w-8 text-gray-400" />
+              </div>
+              <h3 className="text-xl font-semibold text-text mb-2">No records found</h3>
+              <p className="text-text-light">
+                {searchTerm ? 'Try adjusting your search terms' : 'Your medical records will appear here'}
+              </p>
             </div>
-            <h3 className="text-xl font-semibold text-text mb-2">No records found</h3>
-            <p className="text-text-light">
-              {searchTerm ? 'Try adjusting your search terms' : 'Your medical records will appear here'}
-            </p>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );

@@ -1,3 +1,5 @@
+// apps/web/src/pages/Hospitals.tsx
+
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -16,7 +18,10 @@ import {
 import Card from '../components/Card';
 import Button from '../components/Button';
 
-interface Hospital {
+// Menggunakan interface Hospital yang sudah di-update di types/index.ts
+// import { Hospital } from '../types'; // Seharusnya ini sudah terhubung
+
+interface Hospital { // Ini adalah definisi lokal dari mock data, bisa di-refactor ke types/index.ts
   id: string;
   name: string;
   address: string;
@@ -24,7 +29,7 @@ interface Hospital {
   rating: number;
   accreditation: string[];
   image: string;
-  specialties: string[];
+  specialties: string[]; // Ini yang akan dipetakan ke Polyclinic name
   keyServices: string[];
   bedCount: number;
   establishedYear: number;
@@ -36,6 +41,7 @@ const Hospitals: React.FC = () => {
   const [selectedSpecialty, setSelectedSpecialty] = useState('');
   const navigate = useNavigate();
 
+  // Ini masih mock data. Jika Anda ingin dari backend, Anda perlu endpoint untuk hospitals
   const hospitals: Hospital[] = [
     {
       id: '1',
@@ -45,7 +51,7 @@ const Hospitals: React.FC = () => {
       rating: 4.8,
       accreditation: ['JCI Accredited', 'ISO 9001:2015', 'NABH Certified'],
       image: 'https://images.pexels.com/photos/263402/pexels-photo-263402.jpeg?auto=compress&cs=tinysrgb&w=800',
-      specialties: ['Cardiology', 'Neurology', 'Oncology', 'Orthopedics', 'Emergency Medicine'],
+      specialties: ['Cardiology', 'Neurology', 'Orthopedics', 'Emergency Medicine'],
       keyServices: ['24/7 Emergency Care', 'Advanced ICU', 'Robotic Surgery', 'Telemedicine', 'Health Checkups'],
       bedCount: 350,
       establishedYear: 2010,
@@ -109,7 +115,13 @@ const Hospitals: React.FC = () => {
     // Navigate to booking page with hospital data
     navigate('/book-appointment', { 
       state: { 
-        selectedHospital: hospital 
+        selectedHospital: { // Kirim data yang sesuai dengan interface LocationState
+          id: hospital.id,
+          name: hospital.name,
+          address: hospital.address,
+          phone: hospital.phone,
+          specialties: hospital.specialties // Sesuaikan ini jika specialties dari mock data berbeda dengan departments di backend
+        }
       } 
     });
   };

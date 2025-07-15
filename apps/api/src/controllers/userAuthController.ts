@@ -3,10 +3,9 @@
 import { Request, Response, NextFunction } from 'express';
 import { validationResult } from 'express-validator';
 import jwt, { SignOptions } from 'jsonwebtoken';
-import User from '../models/User'; // Menggunakan model User untuk admin/staf
-import { AuthRequest } from '../middleware/auth'; // Menggunakan tipe AuthRequest dari middleware
+import User from '../models/User';
+import { AuthRequest } from '../middleware/auth';
 
-// Helper function untuk generate JWT
 const generateToken = (userId: string): string => {
   const secret = process.env.JWT_SECRET;
   const expiresIn = process.env.JWT_EXPIRES_IN || '7d';
@@ -34,29 +33,25 @@ class UserAuthController {
     try {
       const { email, password } = req.body;
       
-      // Cari user berdasarkan email, pastikan password ikut di-select
       const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
 
-      // Periksa apakah user ditemukan dan akun aktif
       if (!user || !user.isActive) {
         res.status(401).json({ success: false, message: "Email atau password salah, atau akun tidak aktif" });
         return;
       }
 
-      // Bandingkan password
       const isMatch = await user.comparePassword(password);
       if (!isMatch) {
         res.status(401).json({ success: false, message: "Email atau password salah" });
         return;
       }
 
-      // Update lastLogin
       await user.updateLastLogin();
 
       const token = generateToken(user._id.toString());
       
       const userData = user.toObject();
-      delete userData.password; // Jangan kirim password ke frontend
+      delete userData.password;
 
       res.json({ 
         success: true, 
@@ -70,11 +65,9 @@ class UserAuthController {
 
   public async demoLogin(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      // Cari user demo admin (misal: 'admin@demo.com' atau user dengan role 'admin' pertama)
       const demoAdmin = await User.findOne({ email: 'admin@demo.com' }).select('+password'); 
       
       if (!demoAdmin) {
-        // Jika tidak ada user demo, Anda bisa membuat satu di sini atau mengembalikan error
         res.status(404).json({ success: false, message: "User demo admin tidak ditemukan." });
         return;
       }
