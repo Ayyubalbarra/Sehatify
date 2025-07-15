@@ -1,76 +1,67 @@
-"use client"
+// apps/admin/frontend/src/pages/Login.tsx
 
-import type React from "react"
-import { useState } from "react"
-import { useNavigate, useLocation } from "react-router-dom"
-import { useAuth } from "../contexts/AuthContext.tsx"
-import { Eye, EyeOff, Mail, Lock, Loader2 } from "lucide-react"
+import React, { useState } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
+import { Eye, EyeOff, Mail, Lock, Loader2 } from "lucide-react";
 
 const Login: React.FC = () => {
   const [formData, setFormData] = useState({
     email: "",
     password: "",
-  })
-  const [showPassword, setShowPassword] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
+  });
+  const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Ambil fungsi login dan demoLogin dari konteks
-  const { login, demoLogin } = useAuth()
-  const navigate = useNavigate()
-  const location = useLocation()
+  const { login, demoLogin } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
 
-  const from = location.state?.from?.pathname || "/dashboard"
+  const from = location.state?.from?.pathname || "/dashboard";
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target
+    const { name, value } = e.target;
     setFormData((prev) => ({
       ...prev,
       [name]: value,
-    }))
-  }
+    }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (isLoading) return
-    setIsLoading(true)
+    e.preventDefault();
+    if (isLoading) return;
+    setIsLoading(true);
 
     try {
-      // Langsung panggil fungsi login dari konteks dengan kredensial
       await login({
         email: formData.email,
         password: formData.password,
-      })
-      // Jika login berhasil (tidak ada error), arahkan ke dashboard
-      navigate(from, { replace: true })
+      });
+      navigate(from, { replace: true });
     } catch (error) {
-      // Error sudah ditangani oleh AuthContext (menampilkan toast)
-      // Kita bisa log error di sini jika perlu untuk debugging
-      console.error("Login component caught an error:", error)
+      console.error("Login component caught an error:", error);
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   const handleDemoLogin = async () => {
-    if (isLoading) return
-    setIsLoading(true)
+    if (isLoading) return;
+    setIsLoading(true);
 
     try {
-      // Langsung panggil fungsi demoLogin dari konteks
-      await demoLogin()
-      // Jika berhasil, arahkan ke dashboard
-      navigate("/dashboard", { replace: true })
+      await demoLogin();
+      navigate("/dashboard", { replace: true });
     } catch (error) {
-      console.error("Demo login component caught an error:", error)
+      console.error("Demo login component caught an error:", error);
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        {/* Header */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl mb-4">
             <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -86,10 +77,8 @@ const Login: React.FC = () => {
           <p className="text-slate-600">Silakan masuk dengan akun administrator Anda</p>
         </div>
 
-        {/* Login Form */}
         <div className="bg-white rounded-2xl shadow-xl border border-slate-200 p-8">
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Email Field */}
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-slate-700 mb-2">
                 Email
@@ -111,7 +100,6 @@ const Login: React.FC = () => {
               </div>
             </div>
 
-            {/* Password Field */}
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-slate-700 mb-2">
                 Password
@@ -144,7 +132,6 @@ const Login: React.FC = () => {
               </div>
             </div>
 
-            {/* Submit Button */}
             <button
               type="submit"
               disabled={isLoading}
@@ -161,7 +148,6 @@ const Login: React.FC = () => {
             </button>
           </form>
 
-          {/* Demo Login */}
           <div className="mt-6 pt-6 border-t border-slate-200">
             <button
               onClick={handleDemoLogin}
@@ -177,7 +163,7 @@ const Login: React.FC = () => {
         </div>
       </div>
     </div>
-  )
-}
+  );
+};
 
-export default Login
+export default Login;

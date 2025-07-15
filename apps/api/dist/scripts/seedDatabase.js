@@ -3,6 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.EnhancedDataSeeder = void 0;
 const dotenv_1 = __importDefault(require("dotenv"));
 dotenv_1.default.config();
 const database_1 = __importDefault(require("../config/database"));
@@ -26,9 +27,25 @@ const ModelHelpers = {
     generateVisitId: () => `VIS-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`
 };
 class EnhancedDataSeeder {
+    constructor() {
+        this.isConnected = false;
+    }
+    async connect() {
+        if (!this.isConnected) {
+            await database_1.default.connect();
+            this.isConnected = true;
+        }
+    }
+    async disconnect() {
+        if (this.isConnected) {
+            await database_1.default.disconnect();
+            this.isConnected = false;
+        }
+    }
     async seedAll() {
         try {
             console.log("🌱 Starting enhanced database seeding...");
+            await this.connect(); // Hubungkan ke database
             await this.createAdminUser();
             await this.clearAllData();
             await this.seedPolyclinics();
@@ -44,6 +61,9 @@ class EnhancedDataSeeder {
         catch (error) {
             console.error("❌ Error seeding database:", error);
             throw error;
+        }
+        finally {
+            await this.disconnect(); // Pastikan untuk diskonek setelah selesai
         }
     }
     async createAdminUser() {
@@ -205,21 +225,15 @@ class EnhancedDataSeeder {
         console.log("✅ Visits seeded");
     }
 }
-async function runSeeder() {
-    try {
-        await database_1.default.connect();
-        const seeder = new EnhancedDataSeeder();
-        await seeder.seedAll();
-    }
-    catch (error) {
-        // Error sudah dicatat di dalam seeder.seedAll() jika terjadi di sana
-        // jadi tidak perlu log lagi kecuali untuk error koneksi
-        console.error("Seeding script failed:", error);
-    }
-    finally {
-        console.log("🔌 Disconnecting from database...");
-        await database_1.default.disconnect();
-    }
+exports.EnhancedDataSeeder = EnhancedDataSeeder;
+// Hapus fungsi runSeeder() yang lama
+// gantikan dengan blok kondisional di bawah
+// -- PERBAIKAN UTAMA --
+// Blok ini memastikan kode hanya berjalan saat dipanggil via `npm run seed`
+if (require.main === module) {
+    const seeder = new EnhancedDataSeeder();
+    seeder.seedAll().catch(error => {
+        console.error("❌ Seeding script failed to run:", error);
+        process.exit(1);
+    });
 }
-// Jalankan skrip
-runSeeder();

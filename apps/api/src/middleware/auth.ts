@@ -1,15 +1,17 @@
+// apps/api/src/middleware/auth.ts
+
 import { type Request, type Response, type NextFunction } from 'express';
 import jwt, { type JwtPayload } from 'jsonwebtoken';
-import User, { type IUser } from '../models/User';
+import User, { type IUser } from '../models/User'; // Pastikan ini mengimpor model User
 
 // Interface untuk JWT payload yang di-decode
 interface CustomJwtPayload extends JwtPayload {
   userId: string;
 }
 
-// PERBAIKAN: Tipe kustom untuk Request yang sudah terotentikasi
+// Tipe kustom untuk Request yang sudah terotentikasi
 export interface AuthRequest extends Request {
-  user?: IUser; // Sekarang req.user akan berisi seluruh dokumen user, termasuk _id, role, dll.
+  user?: IUser; // req.user akan berisi seluruh dokumen user (admin/staf)
 }
 
 // Middleware untuk memverifikasi token
@@ -50,9 +52,7 @@ export const authenticateToken = async (
       return;
     }
     
-    // PERBAIKAN: Set seluruh objek user ke dalam request
     req.user = user;
-
     next();
   } catch (error: unknown) {
     if (error instanceof jwt.JsonWebTokenError) {
@@ -70,7 +70,6 @@ export const authenticateToken = async (
 // Middleware untuk otorisasi berdasarkan peran
 export const authorizeRoles = (...roles: Array<IUser['role']>) => {
   return (req: AuthRequest, res: Response, next: NextFunction): void => {
-    // PERBAIKAN: Pengecekan sekarang lebih sederhana
     if (!req.user || !roles.includes(req.user.role)) {
       res.status(403).json({ 
         success: false, 

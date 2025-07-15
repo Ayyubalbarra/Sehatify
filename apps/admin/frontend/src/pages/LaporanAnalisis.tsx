@@ -3,8 +3,8 @@
 import type React from "react"
 import { useState } from "react"
 import { BarChart3, TrendingUp, Download, Calendar, Filter } from "lucide-react"
-import MetricCard from "../components/Dashboard/MetricCard.tsx"
-import ChartCard from "../components/Dashboard/ChartCard.tsx"
+import MetricCard from "../components/Dashboard/MetricCard"
+import ChartCard from "../components/Dashboard/ChartCard"
 // Hapus import CSS yang menyebabkan error
 // import "./DataPages.css"
 

@@ -1,3 +1,5 @@
+// apps/api/src/models/patientUser.model.ts
+
 import mongoose, { Schema, Document, Model } from 'mongoose';
 import bcrypt from 'bcryptjs';
 
@@ -10,7 +12,7 @@ export interface IPatientUserMethods {
 export interface IPatientUser extends Document, IPatientUserMethods {
   fullName: string;
   email: string;
-  password?: string; // <-- PERBAIKAN: Tambahkan tanda tanya (?) di sini
+  password?: string; 
   phone: string;
   dateOfBirth: Date;
   address: string;
@@ -22,7 +24,7 @@ type PatientUserModel = Model<IPatientUser, {}, IPatientUserMethods>;
 const PatientUserSchema: Schema<IPatientUser, PatientUserModel> = new Schema({
   fullName: { type: String, required: true },
   email: { type: String, required: true, unique: true, lowercase: true },
-  password: { type: String, required: true, select: false }, // 'select: false' adalah praktik yang baik
+  password: { type: String, required: true, select: false }, 
   phone: { type: String, required: true },
   dateOfBirth: { type: Date, required: true },
   address: { type: String, required: true },
@@ -40,7 +42,6 @@ PatientUserSchema.pre<IPatientUser>('save', async function (next) {
 
 // Metode untuk membandingkan password
 PatientUserSchema.methods.comparePassword = async function (candidatePassword: string): Promise<boolean> {
-  // Karena password di-select secara manual, kita perlu memastikan ia ada
   if (!this.password) return false; 
   return await bcrypt.compare(candidatePassword, this.password);
 };

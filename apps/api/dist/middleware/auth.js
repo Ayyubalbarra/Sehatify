@@ -22,29 +22,19 @@ const authenticateToken = async (req, res, next) => {
         if (!secret) {
             throw new Error('JWT_SECRET tidak diatur di file .env');
         }
-        // Verifikasi token dengan type assertion yang aman
         const decoded = jsonwebtoken_1.default.verify(token, secret);
         if (typeof decoded !== 'object' || !decoded.userId) {
-            res.status(401).json({
-                success: false,
-                message: "Format token tidak valid."
-            });
+            res.status(401).json({ success: false, message: "Format token tidak valid." });
             return;
         }
         // Cari user berdasarkan ID dari token
-        const user = await User_1.default.findById(decoded.userId).select('role isActive');
+        const user = await User_1.default.findById(decoded.userId).select('-password');
         if (!user || !user.isActive) {
-            res.status(401).json({
-                success: false,
-                message: "Token tidak valid atau akun tidak aktif."
-            });
+            res.status(401).json({ success: false, message: "Token tidak valid atau akun tidak aktif." });
             return;
         }
-        // Set user info ke request object
-        req.user = {
-            userId: user._id.toString(),
-            role: user.role,
-        };
+        // PERBAIKAN: Set seluruh objek user ke dalam request
+        req.user = user;
         next();
     }
     catch (error) {
@@ -62,7 +52,8 @@ exports.authenticateToken = authenticateToken;
 // Middleware untuk otorisasi berdasarkan peran
 const authorizeRoles = (...roles) => {
     return (req, res, next) => {
-        if (!req.user?.role || !roles.includes(req.user.role)) {
+        // PERBAIKAN: Pengecekan sekarang lebih sederhana
+        if (!req.user || !roles.includes(req.user.role)) {
             res.status(403).json({
                 success: false,
                 message: "Akses ditolak. Anda tidak memiliki izin yang cukup."
@@ -83,12 +74,9 @@ const optionalAuth = async (req, res, next) => {
             if (secret) {
                 const decoded = jsonwebtoken_1.default.verify(token, secret);
                 if (typeof decoded === 'object' && decoded.userId) {
-                    const user = await User_1.default.findById(decoded.userId).select('role isActive');
+                    const user = await User_1.default.findById(decoded.userId).select('-password');
                     if (user && user.isActive) {
-                        req.user = {
-                            userId: user._id.toString(),
-                            role: user.role,
-                        };
+                        req.user = user;
                     }
                 }
             }
@@ -96,7 +84,6 @@ const optionalAuth = async (req, res, next) => {
         next();
     }
     catch (error) {
-        // Jika token ada tapi tidak valid, abaikan dan lanjutkan tanpa user info
         next();
     }
 };

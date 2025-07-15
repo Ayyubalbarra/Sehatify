@@ -4,7 +4,7 @@ import type React from "react"
 import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { Calendar, Clock, Users, MapPin, Plus, Search, Filter, Edit, Eye } from "lucide-react"
-import MetricCard from "../components/Dashboard/MetricCard.tsx"
+import MetricCard from "../components/Dashboard/MetricCard"
 // Hapus import CSS
 // import "./DataPages.css"
 // import "./JadwalSDM.css"

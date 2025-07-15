@@ -3,8 +3,8 @@
 import type React from "react"
 import { useState } from "react"
 import { Search, Bell, User, LogOut, Settings, ChevronDown, Menu } from "lucide-react"
-import { useAuth } from "../../contexts/AuthContext.tsx"
-import NotificationDropdown from "../Notifications/NotificationDropdown.tsx"
+import { useAuth } from "../../contexts/AuthContext"
+import NotificationDropdown from "../Notifications/NotificationDropdown"
 
 interface HeaderProps {
   onToggleSidebar?: () => void

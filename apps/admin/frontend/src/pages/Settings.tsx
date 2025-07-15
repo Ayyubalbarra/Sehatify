@@ -5,7 +5,7 @@ import { useState } from "react"
 import { Save, Bell, Shield, Database, Palette, Globe, Mail, Smartphone } from "lucide-react"
 import { useMutation } from "@tanstack/react-query"
 import toast from "react-hot-toast"
-import { useNotifications } from "../contexts/NotificationContext.tsx"
+import { useNotifications } from "../contexts/NotificationContext"
 
 // Komponen Helper untuk konsistensi
 const SectionCard: React.FC<{ title: string; icon: React.ElementType; children: React.ReactNode; actions?: React.ReactNode }> = ({ title, icon: Icon, children, actions }) => (

@@ -1,6 +1,6 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { dashboardAPI } from '../services/api.ts'; // Mengimpor objek API yang benar
+import { dashboardAPI } from '../services/api'; // Mengimpor objek API yang benar
 import { Line } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler } from 'chart.js';
 import { Users, AlertTriangle, Home, BedDouble } from 'lucide-react'; // Mengimpor ikon yang sesuai

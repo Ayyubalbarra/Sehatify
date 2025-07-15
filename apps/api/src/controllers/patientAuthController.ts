@@ -1,10 +1,11 @@
+// apps/api/src/controllers/patientAuthController.ts
+
 import { Request, Response, NextFunction } from 'express';
 import { validationResult } from 'express-validator';
-// PERBAIKAN: Hapus impor 'StringValue'
 import jwt, { SignOptions } from 'jsonwebtoken';
 import PatientUser from '../models/patientUser.model';
 
-// Helper function untuk generate JWT
+// Helper function untuk generate JWT (bisa di-refactor ke util)
 const generateToken = (userId: string): string => {
   const secret = process.env.JWT_SECRET;
   const expiresIn = process.env.JWT_EXPIRES_IN || '7d';
@@ -14,7 +15,6 @@ const generateToken = (userId: string): string => {
     throw new Error('Kesalahan konfigurasi server');
   }
 
-  // PERBAIKAN: Gunakan langsung variabel string tanpa type assertion
   const options: SignOptions = {
     expiresIn: expiresIn,
   };
@@ -23,7 +23,6 @@ const generateToken = (userId: string): string => {
 };
 
 class PatientAuthController {
-  // Registrasi Pasien Baru
   public async register(req: Request, res: Response, next: NextFunction): Promise<void> {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -51,7 +50,7 @@ class PatientAuthController {
 
       await patientUser.save();
       
-      const token = generateToken(patientUser._id.toString());
+      const token = generateToken((patientUser._id as any).toString());
       const userData = patientUser.toObject();
       delete userData.password;
       
@@ -65,7 +64,6 @@ class PatientAuthController {
     }
   }
 
-  // Login Pasien
   public async login(req: Request, res: Response, next: NextFunction): Promise<void> {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -89,7 +87,7 @@ class PatientAuthController {
         return;
       }
 
-      const token = generateToken(patientUser._id.toString());
+      const token = generateToken((patientUser._id as any).toString());
       
       const userData = patientUser.toObject();
       delete userData.password;
@@ -104,30 +102,57 @@ class PatientAuthController {
     }
   }
 
-  // DEMO-LOGIN - Tambahkan method yang diperlukan
   public async demoLogin(req: Request, res: Response): Promise<void> {
-    // Implementasi demo login
-    res.json({ success: true, message: "Demo login berhasil" });
+    // Implementasi demo login untuk pasien (sesuaikan dengan data demo pasien yang Anda miliki)
+    try {
+      const demoPatient = await PatientUser.findOne({ email: 'patient@demo.com' }).select('+password'); 
+      
+      if (!demoPatient) {
+        res.status(404).json({ success: false, message: "User demo pasien tidak ditemukan." });
+        return;
+      }
+
+      const token = generateToken(demoPatient._id.toString());
+      const userData = demoPatient.toObject();
+      delete userData.password;
+
+      res.json({ 
+        success: true, 
+        message: `Login demo pasien berhasil! Selamat datang, ${userData.fullName}.`, 
+        data: { user: userData, token } 
+      });
+
+    } catch (error: any) {
+      res.status(500).json({ success: false, message: error.message || "Terjadi kesalahan pada demo login pasien." });
+    }
   }
 
+  // Implementasi getProfile, updateProfile, changePassword, logout, verifyToken untuk pasien
+  // Menggunakan `AuthRequest` jika Anda ingin middleware `authenticateToken` bekerja dengan pasien juga.
+  // Namun, disarankan membuat middleware autentikasi terpisah untuk pasien jika logikanya berbeda.
   public async getProfile(req: Request, res: Response): Promise<void> {
-    // Implementasi get profile
+    // Implementasi untuk mendapatkan profil pasien
+    res.status(501).json({ success: false, message: "Not Implemented" });
   }
 
   public async updateProfile(req: Request, res: Response): Promise<void> {
-    // Implementasi update profile
+    // Implementasi untuk memperbarui profil pasien
+    res.status(501).json({ success: false, message: "Not Implemented" });
   }
 
   public async changePassword(req: Request, res: Response): Promise<void> {
-    // Implementasi change password
+    // Implementasi untuk mengubah password pasien
+    res.status(501).json({ success: false, message: "Not Implemented" });
   }
 
   public async logout(req: Request, res: Response): Promise<void> {
-    // Implementasi logout
+    // Implementasi untuk logout pasien
+    res.status(501).json({ success: false, message: "Not Implemented" });
   }
 
   public async verifyToken(req: Request, res: Response): Promise<void> {
-    // Implementasi verify token
+    // Implementasi untuk memverifikasi token pasien
+    res.status(501).json({ success: false, message: "Not Implemented" });
   }
 }
 

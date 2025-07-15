@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { X, AlertTriangle, Info, CheckCircle, Clock, Bell } from "lucide-react"
-import { useNotifications } from "../../contexts/NotificationContext.tsx"
+import { useNotifications } from "../../contexts/NotificationContext"
 
 interface NotificationDropdownProps {
   onClose: () => void

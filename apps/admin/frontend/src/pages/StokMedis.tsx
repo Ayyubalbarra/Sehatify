@@ -4,9 +4,9 @@ import type React from "react"
 import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { Plus, Eye, Edit, Trash2, Package, AlertTriangle, TrendingUp, Loader2, Search, Filter } from "lucide-react"
-import MetricCard from "../components/Dashboard/MetricCard.tsx"
-import DataTable from "../components/DataTable/DataTable.tsx"
-import InventoryModal from "../components/Modals/InventoryModal.tsx"
+import MetricCard from "../components/Dashboard/MetricCard"
+import DataTable from "../components/DataTable/DataTable"
+import InventoryModal from "../components/Modals/InventoryModal"
 
 interface InventoryItem {
   _id: string;

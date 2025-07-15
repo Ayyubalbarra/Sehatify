@@ -1,24 +1,17 @@
+// apps/admin/frontend/src/services/api.ts
+
 import axios, { type AxiosInstance, type AxiosResponse, type AxiosError } from "axios"
 import toast from "react-hot-toast"
-// [FIX] Mengimpor dari folder '../types', bukan file '../types.ts'
 import type {
   ApiResponse,
-  PaginatedResponse,
-  User,
+  User, 
   AuthResponse,
   LoginCredentials,
-  DashboardInsights,
-  Patient,
-  Doctor,
-  InventoryItem,
-  Queue,
-  Visit,
-  FilterOptions,
 } from "../types" 
 
 // Buat instance axios
 const api: AxiosInstance = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || "http://localhost:5000/api/v1",
+  baseURL: process.env.REACT_APP_API_URL || "http://localhost:5000/api/v1", // Pastikan ini benar
   timeout: 10000,
   headers: {
     "Content-Type": "application/json",
@@ -47,27 +40,42 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       localStorage.removeItem("token")
       localStorage.removeItem("user")
-      window.location.href = "/login"
-      toast.error("Sesi berakhir. Silakan login kembali.")
-    } else {
-      if (error.response?.status !== 404) {
-        toast.error(message)
+      if (window.location.pathname !== '/login') {
+        window.location.href = "/login"
       }
+      toast.error("Sesi berakhir. Silakan login kembali.")
+    } else if (error.code !== "ERR_CANCELED") {
+        toast.error(message)
     }
     return Promise.reject(error)
   },
 )
 
-// Auth API
+// Auth API untuk Admin
 export const authAPI = {
   login: async (credentials: LoginCredentials): Promise<AuthResponse> => {
-    const response = await api.post<AuthResponse>("/auth/login", credentials)
+    const response = await api.post<AuthResponse>("/auth/admin/login", credentials) 
     return response.data
   },
-  // ... fungsi auth lainnya
+  demoLogin: async (): Promise<AuthResponse> => {
+    const response = await api.post<AuthResponse>("/auth/admin/demo-login") 
+    return response.data
+  },
+  verifyToken: async (): Promise<ApiResponse<{ user: User }>> => {
+    const response = await api.get<ApiResponse<{ user: User }>>("/auth/admin/verify-token")
+    return response.data
+  },
+  updateProfile: async (userData: Partial<User>): Promise<ApiResponse<{ user: User }>> => {
+    const response = await api.put<ApiResponse<{ user: User }>>("/auth/admin/profile", userData)
+    return response.data
+  },
+  getProfile: async (): Promise<ApiResponse<{ user: User }>> => {
+    const response = await api.get<ApiResponse<{ user: User }>>("/auth/admin/profile")
+    return response.data
+  },
 }
 
-// Dashboard API 
+// Dashboard API
 export const dashboardAPI = {
   getOverview: async (): Promise<ApiResponse<any>> => {
     const response = await api.get<ApiResponse<any>>("/dashboard/overview")
@@ -78,7 +86,5 @@ export const dashboardAPI = {
     return response.data
   },
 }
-
-// ...dan API lainnya
 
 export default api

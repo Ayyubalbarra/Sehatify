@@ -6,10 +6,10 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { Plus, Search, Filter, Eye, Edit, Trash2, Users, UserPlus, Activity, Loader2 } from "lucide-react"
 import toast from "react-hot-toast"
 
-import MetricCard from "../components/Dashboard/MetricCard.tsx"
-import DataTable from "../components/DataTable/DataTable.tsx"
-import PatientModal from "../components/Modals/PatientModal.tsx"
-import type { PatientFormData } from "../components/Modals/PatientModal.tsx"
+import MetricCard from "../components/Dashboard/MetricCard"
+import DataTable from "../components/DataTable/DataTable"
+import PatientModal from "../components/Modals/PatientModal"
+import type { PatientFormData } from "../components/Modals/PatientModal"
 // Hapus import CSS
 // import "./DataPages.css"
 

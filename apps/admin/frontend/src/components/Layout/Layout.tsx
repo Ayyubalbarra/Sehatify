@@ -1,16 +1,13 @@
-"use client"
-
-import type React from "react"
-import { useState } from "react"
-import { Outlet } from "react-router-dom"
-import { Bot } from "lucide-react"
-import Sidebar from "./Sidebar.tsx"
-import Header from "./Header.tsx"
-import AIAssistant from "../AIAssistant/AIAssistant.tsx"
+import React, { useState } from "react";
+import { Outlet } from "react-router-dom";
+import { Bot } from "lucide-react";
+import Sidebar from "./Sidebar";
+import Header from "./Header";
+import AIAssistant from "../AIAssistant/AIAssistant";
 
 const Layout: React.FC = () => {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [isChatOpen, setIsChatOpen] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
 
   return (
     <div className="flex h-screen bg-slate-50">
@@ -30,7 +27,6 @@ const Layout: React.FC = () => {
         </main>
       </div>
 
-      {/* AI Assistant Floating Button */}
       {!isChatOpen && (
         <button
           onClick={() => setIsChatOpen(true)}
@@ -41,14 +37,13 @@ const Layout: React.FC = () => {
         </button>
       )}
 
-      {/* AI Assistant Modal */}
       {isChatOpen && (
         <div className="fixed bottom-8 right-8 z-50 w-[440px] max-w-[90vw]">
           <AIAssistant onClose={() => setIsChatOpen(false)} />
         </div>
       )}
     </div>
-  )
-}
+  );
+};
 
-export default Layout
+export default Layout;

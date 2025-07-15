@@ -4,8 +4,8 @@ import type React from "react"
 import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { Plus, Eye, Edit, Stethoscope, Calendar, Clock, Loader2, Search, Filter } from "lucide-react"
-import MetricCard from "../components/Dashboard/MetricCard.tsx"
-import DataTable from "../components/DataTable/DataTable.tsx"
+import MetricCard from "../components/Dashboard/MetricCard"
+import DataTable from "../components/DataTable/DataTable"
 
 interface MedicalService {
   _id: string;

@@ -5,7 +5,7 @@ import { useState } from "react"
 import { Save, Upload, Eye, EyeOff, Shield, Activity, Clock, User as UserIcon } from "lucide-react"
 import { useMutation } from "@tanstack/react-query"
 import toast from "react-hot-toast"
-import { useAuth } from "../contexts/AuthContext.tsx"
+import { useAuth } from "../contexts/AuthContext"
 // Hapus import CSS
 // import "./Akun.css"
 
