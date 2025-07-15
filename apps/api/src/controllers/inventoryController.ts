@@ -1,185 +1,40 @@
 import { Request, Response, NextFunction } from 'express';
-import { Document } from 'mongoose';
-
-// Import models and utilities - adjust paths as needed
 import Inventory from "../models/Inventory";
-import { generateItemId } from "../utils/modelHelpers";
+import * as ModelHelpers from "../utils/modelHelpers"; // Pastikan path ini benar
+import { IInventory as InventoryItem } from '../interfaces/IInventory'; // Gunakan nama alias untuk konsistensi
 
-// Interface definitions
-interface InventoryQueryParams {
-  page?: string;
-  limit?: string;
-  search?: string;
-  category?: string;
-  status?: string;
-  sortBy?: string;
-  sortOrder?: 'asc' | 'desc';
-}
-
-interface InventoryFilter {
-  $or?: Array<{
-    name?: { $regex: string; $options: string };
-    itemId?: { $regex: string; $options: string };
-  }>;
-  category?: string;
-  status?: string;
-  $expr?: { $lte: [string, string] };
-}
-
-interface InventoryItem {
-  save(): unknown;
-  _id: string;
-  itemId: string;
-  name: string;
-  category: string;
-  unit: string;
-  unitPrice: number;
-  currentStock: number;
-  minimumStock: number;
-  maximumStock?: number;
-  status: 'Active' | 'Inactive' | 'Low Stock' | 'Out of Stock';
-  supplier?: string;
-  description?: string;
-  lastRestockDate?: Date;
-  expiryDate?: Date;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-interface PaginationInfo {
-  totalPages: number;
-  currentPage: number;
-  total: number;
-}
-
-interface InventoryListResponse {
-  success: boolean;
-  data: InventoryItem[];
-  pagination: PaginationInfo;
-}
-
-interface InventoryStats {
-  total: number;
-  lowStock: number;
-  outOfStock: number;
-  totalValue: number;
-}
-
-interface InventoryStatsResponse {
-  success: boolean;
-  data: InventoryStats;
-}
-
-interface CreateInventoryRequest {
-  name: string;
-  category: string;
-  unit: string;
-  unitPrice: number;
-  currentStock?: number;
-  minimumStock?: number;
-  maximumStock?: number;
-  supplier?: string;
-  description?: string;
-  expiryDate?: Date;
-}
-
-interface UpdateInventoryRequest {
-  name?: string;
-  category?: string;
-  unit?: string;
-  unitPrice?: number;
-  currentStock?: number;
-  minimumStock?: number;
-  maximumStock?: number;
-  supplier?: string;
-  description?: string;
-  status?: 'Active' | 'Inactive';
-  expiryDate?: Date;
-}
-
-interface UpdateStockRequest {
-  quantity: number;
-  type: 'add' | 'subtract';
-}
-
-interface LowStockSummary {
-  total: number;
-  critical: number;
-}
-
-interface LowStockResponse {
-  success: boolean;
-  data: InventoryItem[];
-  summary: LowStockSummary;
-}
-
-interface ApiResponse<T> {
-  success: boolean;
-  data?: T;
-  message?: string;
-  pagination?: PaginationInfo;
-  summary?: LowStockSummary;
-}
+// Definisikan interface lain yang spesifik untuk controller ini jika perlu
 
 class InventoryController {
   // Get all inventory items with filters and pagination
   async getInventoryItems(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { 
-        page = '1', 
-        limit = '10', 
-        search, 
-        category, 
-        status, 
-        sortBy = 'name', 
-        sortOrder = 'asc' 
-      } = req.query as InventoryQueryParams;
+      const { page = '1', limit = '10', search, category, status, sortBy = 'name', sortOrder = 'asc' } = req.query;
       
-      const query: InventoryFilter = {};
+      const query: any = {};
+      if (search) query.$or = [{ name: { $regex: search, $options: "i" } }, { itemId: { $regex: search, $options: "i" } }];
+      if (category) query.category = category;
+      if (status === 'Low Stock') query.$expr = { $lte: ["$currentStock", "$minimumStock"] };
+      else if (status) query.status = status;
 
-      if (search) {
-        query.$or = [
-          { name: { $regex: search, $options: "i" } }, 
-          { itemId: { $regex: search, $options: "i" } }
-        ];
-      }
-      
-      if (category && category !== "all") {
-        query.category = category;
-      }
-      
-      if (status && status !== "all") {
-        if (status === 'Low Stock') {
-          query.$expr = { $lte: ["$currentStock", "$minimumStock"] };
-        } else {
-          query.status = status;
-        }
-      }
-
-      const pageNum = parseInt(page);
-      const limitNum = parseInt(limit);
+      const pageNum = parseInt(page as string);
+      const limitNum = parseInt(limit as string);
       const sortDirection = sortOrder === "desc" ? -1 : 1;
 
       const [items, total] = await Promise.all([
         Inventory.find(query)
-          .sort({ [sortBy]: sortDirection })
+          .sort({ [sortBy as string]: sortDirection })
           .limit(limitNum)
           .skip((pageNum - 1) * limitNum)
-          .lean(),
+          .lean(), // <-- Perbaikan
         Inventory.countDocuments(query),
       ]);
       
-      const response: InventoryListResponse = {
+      res.json({
         success: true,
-        data: items,
-        pagination: {
-          totalPages: Math.ceil(total / limitNum),
-          currentPage: pageNum,
-          total
-        }
-      };
-
-      res.json(response);
+        data: items as InventoryItem[], // <-- Perbaikan
+        pagination: { totalPages: Math.ceil(total / limitNum), currentPage: pageNum, total }
+      });
     } catch (error) {
       next(error);
     }
@@ -188,22 +43,14 @@ class InventoryController {
   // Get single inventory item by ID
   async getInventoryItemById(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const item: InventoryItem | null = await Inventory.findById(req.params.id).lean();
+      const item = await Inventory.findById(req.params.id).lean(); // <-- Perbaikan
       
       if (!item) {
-        const response: ApiResponse<never> = {
-          success: false,
-          message: "Item tidak ditemukan"
-        };
-        res.status(404).json(response);
+        res.status(404).json({ success: false, message: "Item tidak ditemukan" });
         return;
       }
 
-      const response: ApiResponse<InventoryItem> = {
-        success: true,
-        data: item
-      };
-      res.json(response);
+      res.json({ success: true, data: item as InventoryItem }); // <-- Perbaikan
     } catch (error) {
       next(error);
     }
@@ -212,33 +59,24 @@ class InventoryController {
   // Get inventory statistics
   async getInventoryStats(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const [totalItems, lowStock, outOfStock, totalValue] = await Promise.all([
+      const [totalItems, lowStock, outOfStock, valueResult] = await Promise.all([
         Inventory.countDocuments(),
         Inventory.countDocuments({ $expr: { $lte: ["$currentStock", "$minimumStock"] } }),
         Inventory.countDocuments({ currentStock: 0 }),
         Inventory.aggregate([
-          { 
-            $group: { 
-              _id: null, 
-              totalValue: { 
-                $sum: { $multiply: ["$currentStock", "$unitPrice"] } 
-              } 
-            } 
-          }
+          { $group: { _id: null, totalValue: { $sum: { $multiply: ["$currentStock", "$unitPrice"] } } } }
         ]),
       ]);
       
-      const response: InventoryStatsResponse = {
+      res.json({
         success: true,
         data: {
           total: totalItems,
           lowStock,
           outOfStock,
-          totalValue: totalValue[0]?.totalValue || 0
+          totalValue: valueResult[0]?.totalValue || 0
         }
-      };
-
-      res.json(response);
+      });
     } catch (error) {
       next(error);
     }
@@ -247,29 +85,18 @@ class InventoryController {
   // Create a new inventory item
   async createInventoryItem(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { name, category, unit, unitPrice }: CreateInventoryRequest = req.body;
-      
-      if (!name || !category || !unit || unitPrice === undefined) {
-        const response: ApiResponse<never> = {
-          success: false,
-          message: "Nama, kategori, unit, dan harga wajib diisi"
-        };
-        res.status(400).json(response);
-        return;
-      }
-
+      const { name, category } = req.body;
       const item = new Inventory({ 
         ...req.body, 
-        itemId: ModelHelpers.generateItemId(category) 
+        itemId: ModelHelpers.generateItemId() // Menggunakan helper yang diimpor
       });
       await item.save();
 
-      const response: ApiResponse<InventoryItem> = {
+      res.status(201).json({
         success: true,
         message: "Item berhasil ditambahkan",
-        data: item
-      };
-      res.status(201).json(response);
+        data: item.toObject() as InventoryItem // <-- Perbaikan
+      });
     } catch (error) {
       next(error);
     }
@@ -278,27 +105,18 @@ class InventoryController {
   // Update an inventory item
   async updateInventoryItem(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const item: InventoryItem | null = await Inventory.findByIdAndUpdate(
+      const item = await Inventory.findByIdAndUpdate(
         req.params.id,
         req.body,
         { new: true, runValidators: true }
-      );
+      ).lean(); // <-- Perbaikan
 
       if (!item) {
-        const response: ApiResponse<never> = {
-          success: false,
-          message: "Item tidak ditemukan"
-        };
-        res.status(404).json(response);
+        res.status(404).json({ success: false, message: "Item tidak ditemukan" });
         return;
       }
 
-      const response: ApiResponse<InventoryItem> = {
-        success: true,
-        message: "Item berhasil diupdate",
-        data: item
-      };
-      res.json(response);
+      res.json({ success: true, message: "Item berhasil diupdate", data: item as InventoryItem });
     } catch (error) {
       next(error);
     }
@@ -307,22 +125,14 @@ class InventoryController {
   // Delete an inventory item
   async deleteInventoryItem(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const item: InventoryItem | null = await Inventory.findByIdAndDelete(req.params.id);
+      const item = await Inventory.findByIdAndDelete(req.params.id).lean(); // <-- Perbaikan
       
       if (!item) {
-        const response: ApiResponse<never> = {
-          success: false,
-          message: "Item tidak ditemukan"
-        };
-        res.status(404).json(response);
+        res.status(404).json({ success: false, message: "Item tidak ditemukan" });
         return;
       }
 
-      const response: ApiResponse<never> = {
-        success: true,
-        message: "Item berhasil dihapus"
-      };
-      res.json(response);
+      res.json({ success: true, message: "Item berhasil dihapus" });
     } catch (error) {
       next(error);
     }
@@ -331,49 +141,30 @@ class InventoryController {
   // Update stock for an item
   async updateStock(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { quantity, type }: UpdateStockRequest = req.body;
-      
-      const item: InventoryItem | null = await Inventory.findById(req.params.id);
+      const { quantity, type } = req.body;
+      const item = await Inventory.findById(req.params.id);
       
       if (!item) {
-        const response: ApiResponse<never> = {
-          success: false,
-          message: "Item tidak ditemukan"
-        };
-        res.status(404).json(response);
+        res.status(404).json({ success: false, message: "Item tidak ditemukan" });
         return;
       }
 
       if (type === "add") {
-        item.currentStock += quantity;
+        item.currentStock += Number(quantity);
         item.lastRestockDate = new Date();
       } else if (type === "subtract") {
-        if (item.currentStock < quantity) {
-          const response: ApiResponse<never> = {
-            success: false,
-            message: "Stok tidak mencukupi"
-          };
-          res.status(400).json(response);
+        if (item.currentStock < Number(quantity)) {
+          res.status(400).json({ success: false, message: "Stok tidak mencukupi" });
           return;
         }
-        item.currentStock -= quantity;
+        item.currentStock -= Number(quantity);
       } else {
-        const response: ApiResponse<never> = {
-          success: false,
-          message: "Tipe update tidak valid (add/subtract)"
-        };
-        res.status(400).json(response);
+        res.status(400).json({ success: false, message: "Tipe update tidak valid (add/subtract)" });
         return;
       }
 
       await item.save();
-
-      const response: ApiResponse<InventoryItem> = {
-        success: true,
-        message: "Stok berhasil diupdate",
-        data: item
-      };
-      res.json(response);
+      res.json({ success: true, message: "Stok berhasil diupdate", data: item.toObject() as InventoryItem });
     } catch (error) {
       next(error);
     }
@@ -382,24 +173,20 @@ class InventoryController {
   // Get low stock alerts
   async getLowStockAlerts(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const lowStockItems: InventoryItem[] = await Inventory.find({ 
+      const lowStockItems = await Inventory.find({ 
         $expr: { $lte: ["$currentStock", "$minimumStock"] } 
       })
       .sort({ currentStock: 1 })
-      .lean();
+      .lean(); // <-- Perbaikan
 
-      const summary: LowStockSummary = {
-        total: lowStockItems.length,
-        critical: lowStockItems.filter(item => item.currentStock === 0).length
-      };
-
-      const response: LowStockResponse = {
+      res.json({
         success: true,
-        data: lowStockItems,
-        summary
-      };
-
-      res.json(response);
+        data: lowStockItems as InventoryItem[], // <-- Perbaikan
+        summary: {
+            total: lowStockItems.length,
+            critical: lowStockItems.filter(item => item.currentStock === 0).length
+        }
+      });
     } catch (error) {
       next(error);
     }

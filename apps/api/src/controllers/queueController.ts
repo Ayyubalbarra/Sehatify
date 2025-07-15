@@ -1,16 +1,26 @@
 import { Request, Response, NextFunction } from 'express';
 import { Server } from 'socket.io';
-import Queue, { IQueue } from "../models/Queue";
+import Queue from "../models/Queue";
 import Schedule from "../models/Schedule";
-import Patient from "../models/Patient";
 import { AuthRequest } from '../middleware/auth';
+import { IQueue } from '../interfaces/IQueue'; // Pastikan Anda memiliki interface ini
 
-// Helper Functions dengan Tipe Data
+// Tipe untuk hasil populate yang lebih spesifik
+interface PopulatedQueueForList {
+    _id: string;
+    patientId: { name: string; } | null;
+    polyclinicId: { name: string; } | null;
+    scheduleId: { startTime: string; } | null;
+    status: string;
+    createdAt: Date;
+    queueNumber: number;
+}
 
-function calculateWaitTime(queue: IQueue): number {
-  if (queue.status === 'Completed' || queue.status === 'Cancelled') return 0;
+// Helper Functions dengan Tipe Data yang Lebih Aman
+function calculateWaitTime(createdAt: Date, status: string): number {
+  if (status === 'Completed' || status === 'Cancelled') return 0;
   const now = new Date();
-  const queueTime = new Date(queue.createdAt);
+  const queueTime = new Date(createdAt);
   const diffInMinutes = Math.floor((now.getTime() - queueTime.getTime()) / (1000 * 60));
   return Math.max(0, diffInMinutes);
 }
@@ -20,10 +30,11 @@ function transformStatus(status?: string): string {
   return status.toLowerCase().replace(/\s+/g, '-');
 }
 
-function formatAppointmentTime(schedule: any): string {
-  if (!schedule || !schedule.startTime) return 'N/A';
+function formatAppointmentTime(schedule?: { startTime: string } | null): string {
+  if (!schedule?.startTime) return 'N/A';
   try {
-    return new Date(schedule.startTime).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false });
+    // Asumsi startTime adalah string jam seperti "08:00"
+    return schedule.startTime;
   } catch (error) {
     return 'N/A';
   }
@@ -32,29 +43,24 @@ function formatAppointmentTime(schedule: any): string {
 // Fungsi untuk mengambil dan memancarkan data antrian terbaru
 async function emitQueueUpdate(io: Server) {
   try {
-    const today = new Date();
-    const query = {
-      queueDate: {
-        $gte: new Date(new Date().setHours(0, 0, 0, 0)),
-        $lt: new Date(new Date().setHours(23, 59, 59, 999)),
-      },
-    };
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
 
-    const queues = await Queue.find(query)
+    const queues = await Queue.find({ queueDate: { $gte: todayStart } })
       .populate("patientId", "name")
       .populate("polyclinicId", "name")
       .populate("scheduleId", "startTime")
       .sort({ queueNumber: 1 })
       .limit(100)
-      .lean<IQueue[]>();
+      .lean<PopulatedQueueForList[]>();
 
     const transformedQueues = queues.map(queue => ({
       id: queue._id.toString(),
-      patientName: (queue.patientId as any)?.name || 'Pasien Tidak Dikenal',
-      polyclinic: (queue.polyclinicId as any)?.name || 'Poli Tidak Dikenal',
+      patientName: queue.patientId?.name || 'Pasien Dihapus',
+      polyclinic: queue.polyclinicId?.name || 'Poli Dihapus',
       appointmentTime: formatAppointmentTime(queue.scheduleId),
       status: transformStatus(queue.status),
-      waitTime: calculateWaitTime(queue),
+      waitTime: calculateWaitTime(queue.createdAt, queue.status),
       queueNumber: queue.queueNumber || 0,
     }));
     
@@ -68,30 +74,24 @@ async function emitQueueUpdate(io: Server) {
 class QueueController {
   public async getAllQueues(req: Request, res: Response, next: NextFunction) {
     try {
-      const io: Server = req.app.get("io");
-      const today = new Date();
-      const query = {
-        queueDate: {
-          $gte: new Date(today.setHours(0, 0, 0, 0)),
-          $lt: new Date(new Date(today).setHours(23, 59, 59, 999)),
-        },
-      };
-
-      const queues = await Queue.find(query)
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      
+      const queues = await Queue.find({ queueDate: { $gte: todayStart } })
         .populate("patientId", "name")
         .populate("polyclinicId", "name")
         .populate("scheduleId", "startTime")
         .sort({ queueNumber: 1 })
         .limit(100)
-        .lean<IQueue[]>();
+        .lean<PopulatedQueueForList[]>();
 
       const transformedQueues = queues.map(queue => ({
           id: queue._id.toString(),
-          patientName: (queue.patientId as any)?.name || 'Pasien Tidak Dikenal',
-          polyclinic: (queue.polyclinicId as any)?.name || 'Poli Tidak Dikenal',
+          patientName: queue.patientId?.name || 'Pasien Dihapus',
+          polyclinic: queue.polyclinicId?.name || 'Poli Dihapus',
           appointmentTime: formatAppointmentTime(queue.scheduleId),
           status: transformStatus(queue.status),
-          waitTime: calculateWaitTime(queue),
+          waitTime: calculateWaitTime(queue.createdAt, queue.status),
           queueNumber: queue.queueNumber || 0,
       }));
       
@@ -129,6 +129,10 @@ class QueueController {
             return res.status(404).json({ success: false, message: "Jadwal tidak ditemukan" });
         }
 
+        if(schedule.availableSlots <= 0) {
+            return res.status(400).json({ success: false, message: "Kuota untuk jadwal ini sudah penuh." });
+        }
+
         const lastQueue = await Queue.findOne({ scheduleId }).sort({ queueNumber: -1 });
         const queueNumber = (lastQueue?.queueNumber || 0) + 1;
 
@@ -140,16 +144,15 @@ class QueueController {
             polyclinicId: schedule.polyclinicId,
             queueNumber,
             queueDate: schedule.date,
-            createdBy: req.user?.userId,
+            createdBy: req.user?._id,
         });
         await queue.save();
 
         await Schedule.findByIdAndUpdate(scheduleId, { $inc: { bookedSlots: 1, availableSlots: -1 } });
         
-        const io: Server = req.app.get("io");
-        await emitQueueUpdate(io);
+        await emitQueueUpdate(req.app.get("io"));
 
-        res.status(201).json({ success: true, message: "Antrian berhasil dibuat.", data: queue });
+        res.status(201).json({ success: true, message: "Antrian berhasil dibuat.", data: queue.toObject() });
     } catch (error) {
       next(error);
     }
@@ -164,10 +167,9 @@ class QueueController {
             return res.status(404).json({ success: false, message: "Antrian tidak ditemukan" });
         }
 
-        const io: Server = req.app.get("io");
-        await emitQueueUpdate(io);
+        await emitQueueUpdate(req.app.get("io"));
 
-        res.json({ success: true, message: "Status antrian diperbarui.", data: updatedQueue });
+        res.json({ success: true, message: "Status antrian diperbarui.", data: updatedQueue.toObject() });
     } catch (error) {
       next(error);
     }
@@ -177,16 +179,19 @@ class QueueController {
      try {
         const queue = await Queue.findById(req.params.id);
         if (!queue) return res.status(404).json({ success: false, message: "Antrian tidak ditemukan" });
+        
+        if (queue.status === "Completed" || queue.status === "Cancelled") {
+            return res.status(400).json({ success: false, message: `Antrian sudah ${queue.status} dan tidak bisa dibatalkan.` });
+        }
 
         queue.status = "Cancelled";
         await queue.save();
         
         await Schedule.findByIdAndUpdate(queue.scheduleId, { $inc: { bookedSlots: -1, availableSlots: 1 } });
         
-        const io: Server = req.app.get("io");
-        await emitQueueUpdate(io);
+        await emitQueueUpdate(req.app.get("io"));
 
-        res.json({ success: true, message: "Antrian dibatalkan." });
+        res.json({ success: true, message: "Antrian berhasil dibatalkan." });
     } catch (error) {
         next(error);
     }
@@ -194,26 +199,25 @@ class QueueController {
   
   public async getQueueStats(req: Request, res: Response, next: NextFunction) {
     try {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
 
-      const [totalQueues, waitingQueues, completedQueues] = await Promise.all([
-        Queue.countDocuments({ queueDate: { $gte: today, $lt: tomorrow } }),
-        Queue.countDocuments({ queueDate: { $gte: today, $lt: tomorrow }, status: "Waiting" }),
-        Queue.countDocuments({ queueDate: { $gte: today, $lt: tomorrow }, status: "Completed" }),
+      const stats = await Queue.aggregate([
+          { $match: { queueDate: { $gte: todayStart } } },
+          { 
+              $group: {
+                  _id: null,
+                  total: { $sum: 1 },
+                  waiting: { $sum: { $cond: [{ $eq: ["$status", "Waiting"] }, 1, 0] } },
+                  completed: { $sum: { $cond: [{ $eq: ["$status", "Completed"] }, 1, 0] } },
+                  inProgress: { $sum: { $cond: [{ $eq: ["$status", "In Progress"] }, 1, 0] } }
+              }
+          }
       ]);
 
-      res.json({
-        success: true,
-        data: {
-          total: totalQueues,
-          waiting: waitingQueues,
-          completed: completedQueues,
-          inProgress: totalQueues - waitingQueues - completedQueues, // Asumsi sisanya In Progress
-        },
-      });
+      const result = stats[0] || { total: 0, waiting: 0, completed: 0, inProgress: 0 };
+      
+      res.json({ success: true, data: result });
     } catch (error) {
       next(error);
     }
@@ -221,17 +225,16 @@ class QueueController {
 
   public async getTodayQueueSummary(req: Request, res: Response, next: NextFunction) {
     try {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
 
       const queues = await Queue.aggregate([
-        { $match: { queueDate: { $gte: today, $lt: tomorrow } } },
+        { $match: { queueDate: { $gte: todayStart } } },
         { $group: { _id: "$polyclinicId", count: { $sum: 1 } } },
         { $lookup: { from: "polyclinics", localField: "_id", foreignField: "_id", as: "polyclinicInfo" } },
         { $unwind: "$polyclinicInfo" },
         { $project: { _id: 0, polyclinicName: "$polyclinicInfo.name", count: 1 } },
+        { $sort: { count: -1 } }
       ]);
 
       res.json({ success: true, data: queues });

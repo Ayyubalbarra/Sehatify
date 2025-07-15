@@ -3,9 +3,9 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+const express_validator_1 = require("express-validator");
 const Bed_1 = __importDefault(require("../models/Bed"));
 const Patient_1 = __importDefault(require("../models/Patient"));
-const express_validator_1 = require("express-validator");
 class BedController {
     async getAllBeds(req, res, next) {
         try {
@@ -58,7 +58,7 @@ class BedController {
             if (existingBed) {
                 return res.status(400).json({ success: false, message: "Kombinasi tempat tidur, ruangan, dan bangsal sudah ada" });
             }
-            const bed = new Bed_1.default({ ...req.body, createdBy: req.user?.userId });
+            const bed = new Bed_1.default({ ...req.body, createdBy: req.user?._id });
             await bed.save();
             res.status(201).json({ success: true, message: "Tempat tidur berhasil dibuat", data: bed });
         }
@@ -68,7 +68,7 @@ class BedController {
     }
     async updateBed(req, res, next) {
         try {
-            const bed = await Bed_1.default.findByIdAndUpdate(req.params.id, { ...req.body, updatedBy: req.user?.userId }, { new: true });
+            const bed = await Bed_1.default.findByIdAndUpdate(req.params.id, { ...req.body, updatedBy: req.user?._id }, { new: true });
             if (!bed) {
                 return res.status(404).json({ success: false, message: "Tempat tidur tidak ditemukan" });
             }
@@ -103,11 +103,12 @@ class BedController {
             const patient = await Patient_1.default.findById(patientId);
             if (!patient)
                 return res.status(404).json({ success: false, message: "Pasien tidak ditemukan" });
-            bed.currentPatient = patientId;
+            bed.currentPatient = patient._id;
             bed.status = "occupied";
             bed.occupiedAt = new Date();
             await bed.save();
-            res.json({ success: true, message: "Pasien berhasil ditempatkan", data: bed });
+            const populatedBed = await bed.populate("currentPatient", "name patientId");
+            res.json({ success: true, message: "Pasien berhasil ditempatkan", data: populatedBed });
         }
         catch (error) {
             next(error);
@@ -116,7 +117,7 @@ class BedController {
     async updateBedStatus(req, res, next) {
         try {
             const { status } = req.body;
-            const updateData = { status, updatedBy: req.user?.userId };
+            const updateData = { status, updatedBy: req.user?._id };
             if (status === 'available') {
                 updateData.currentPatient = null;
                 updateData.occupiedAt = null;

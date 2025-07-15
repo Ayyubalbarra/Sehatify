@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const Patient_1 = __importDefault(require("../models/Patient"));
 const Visit_1 = __importDefault(require("../models/Visit"));
 const Queue_1 = __importDefault(require("../models/Queue"));
+// PERBAIKAN: Mengimpor semua helper yang dibutuhkan dari modelHelpers
 const modelHelpers_1 = require("../utils/modelHelpers");
 class PatientController {
     // Get all patients with filtering and pagination
@@ -29,12 +30,13 @@ class PatientController {
                     .sort({ registrationDate: -1 })
                     .limit(limitNum)
                     .skip((pageNum - 1) * limitNum)
-                    .lean(), // Menggunakan .lean<IPatient[]>() untuk mendapatkan objek JS biasa dengan tipe yang benar
+                    .lean(), // Menggunakan .lean() memastikan hasil adalah objek biasa
                 Patient_1.default.countDocuments(query),
             ]);
+            // Menambahkan properti 'age' ke setiap objek pasien
             const patientsWithAge = patients.map(p => ({
                 ...p,
-                age: ModelHelpers.calculateAge(p.dateOfBirth)
+                age: (0, modelHelpers_1.calculateAge)(p.dateOfBirth) // <-- PERBAIKAN: Fungsi helper sekarang dikenali
             }));
             res.json({
                 success: true,
@@ -96,16 +98,16 @@ class PatientController {
     async createPatient(req, res, next) {
         try {
             const { nik } = req.body;
-            if (!ModelHelpers.validateNIK(nik)) {
+            if (!(0, modelHelpers_1.validateNIK)(nik)) { // <-- PERBAIKAN: Fungsi helper sekarang dikenali
                 return res.status(400).json({ success: false, message: "Format NIK tidak valid" });
             }
-            const existingPatient = await Patient_1.default.findOne({ nik });
+            const existingPatient = await Patient_1.default.findOne({ nik }).lean();
             if (existingPatient) {
                 return res.status(400).json({ success: false, message: "NIK sudah terdaftar" });
             }
             const patient = new Patient_1.default(req.body);
             await patient.save();
-            res.status(201).json({ success: true, message: "Pasien berhasil ditambahkan", data: patient });
+            res.status(201).json({ success: true, message: "Pasien berhasil ditambahkan", data: patient.toObject() });
         }
         catch (error) {
             next(error);
@@ -114,7 +116,7 @@ class PatientController {
     // Update a patient's data
     async updatePatient(req, res, next) {
         try {
-            const patient = await Patient_1.default.findOneAndUpdate({ patientId: req.params.patientId }, req.body, { new: true, runValidators: true });
+            const patient = await Patient_1.default.findOneAndUpdate({ patientId: req.params.patientId }, req.body, { new: true, runValidators: true }).lean();
             if (!patient) {
                 return res.status(404).json({ success: false, message: "Pasien tidak ditemukan" });
             }
@@ -127,7 +129,7 @@ class PatientController {
     // Delete a patient
     async deletePatient(req, res, next) {
         try {
-            const patient = await Patient_1.default.findOne({ patientId: req.params.patientId });
+            const patient = await Patient_1.default.findOne({ patientId: req.params.patientId }).lean();
             if (!patient) {
                 return res.status(404).json({ success: false, message: "Pasien tidak ditemukan" });
             }
@@ -136,7 +138,7 @@ class PatientController {
                 Queue_1.default.countDocuments({ patientId: patient._id, status: { $in: ["Waiting", "In Progress"] } }),
             ]);
             if (activeVisits > 0 || activeQueues > 0) {
-                return res.status(400).json({ success: false, message: "Tidak dapat menghapus pasien dengan kunjungan/antrian aktif" });
+                return res.status(400).json({ success: false, message: "Tidak dapat menghapus pasien dengan kunjungan atau antrian aktif" });
             }
             await Patient_1.default.findOneAndDelete({ patientId: req.params.patientId });
             res.json({ success: true, message: "Pasien berhasil dihapus" });

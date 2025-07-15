@@ -1,11 +1,13 @@
-import { Request, Response, NextFunction } from 'express';
+import { Response, NextFunction } from 'express';
+import { validationResult } from "express-validator";
+import { Types } from 'mongoose';
 import Bed from "../models/Bed";
 import Patient from "../models/Patient";
-import { validationResult } from "express-validator";
 import { AuthRequest } from '../middleware/auth';
+import { IPatient } from '../interfaces/IPatient';
 
 class BedController {
-  public async getAllBeds(req: Request, res: Response, next: NextFunction) {
+  public async getAllBeds(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const { page = 1, limit = 10, status, ward, bedType } = req.query;
       const filter: any = {};
@@ -33,7 +35,7 @@ class BedController {
     }
   }
 
-  public async getBedById(req: Request, res: Response, next: NextFunction) {
+  public async getBedById(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const bed = await Bed.findById(req.params.id).populate("currentPatient", "name patientId phone").lean();
       if (!bed) {
@@ -56,7 +58,7 @@ class BedController {
         return res.status(400).json({ success: false, message: "Kombinasi tempat tidur, ruangan, dan bangsal sudah ada" });
       }
       
-      const bed = new Bed({ ...req.body, createdBy: req.user?.userId });
+      const bed = new Bed({ ...req.body, createdBy: req.user?._id });
       await bed.save();
       res.status(201).json({ success: true, message: "Tempat tidur berhasil dibuat", data: bed });
     } catch (error) {
@@ -66,7 +68,7 @@ class BedController {
 
   public async updateBed(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const bed = await Bed.findByIdAndUpdate(req.params.id, { ...req.body, updatedBy: req.user?.userId }, { new: true });
+      const bed = await Bed.findByIdAndUpdate(req.params.id, { ...req.body, updatedBy: req.user?._id }, { new: true });
       if (!bed) {
         return res.status(404).json({ success: false, message: "Tempat tidur tidak ditemukan" });
       }
@@ -76,7 +78,7 @@ class BedController {
     }
   }
 
-  public async deleteBed(req: Request, res: Response, next: NextFunction) {
+  public async deleteBed(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const bed = await Bed.findById(req.params.id);
       if (!bed) return res.status(404).json({ success: false, message: "Tempat tidur tidak ditemukan" });
@@ -90,22 +92,24 @@ class BedController {
     }
   }
 
-  public async assignPatientToBed(req: Request, res: Response, next: NextFunction) {
+  public async assignPatientToBed(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const { patientId } = req.body;
       const bed = await Bed.findById(req.params.id);
       if (!bed || bed.status !== "available") {
         return res.status(400).json({ success: false, message: "Tempat tidur tidak ditemukan atau tidak tersedia" });
       }
-      const patient = await Patient.findById(patientId);
+      
+      const patient: IPatient | null = await Patient.findById(patientId);
       if (!patient) return res.status(404).json({ success: false, message: "Pasien tidak ditemukan" });
       
-      bed.currentPatient = patientId;
+      bed.currentPatient = patient._id;
       bed.status = "occupied";
       bed.occupiedAt = new Date();
       await bed.save();
       
-      res.json({ success: true, message: "Pasien berhasil ditempatkan", data: bed });
+      const populatedBed = await bed.populate("currentPatient", "name patientId");
+      res.json({ success: true, message: "Pasien berhasil ditempatkan", data: populatedBed });
     } catch (error) {
       next(error);
     }
@@ -114,7 +118,7 @@ class BedController {
   public async updateBedStatus(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const { status } = req.body;
-      const updateData: any = { status, updatedBy: req.user?.userId };
+      const updateData: any = { status, updatedBy: req.user?._id };
       
       if (status === 'available') {
         updateData.currentPatient = null;

@@ -1,14 +1,20 @@
 "use strict";
-const dbConnection = require("../config/database");
-const Patient = require("../models/Patient");
-const Doctor = require("../models/Doctor");
-const Polyclinic = require("../models/Polyclinic");
-const Schedule = require("../models/Schedule");
-const Queue = require("../models/Queue");
-const Inventory = require("../models/Inventory");
-const Bed = require("../models/Bed");
-const Visit = require("../models/Visit");
-const User = require("../models/User");
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const dotenv_1 = __importDefault(require("dotenv"));
+dotenv_1.default.config();
+const database_1 = __importDefault(require("../config/database"));
+const Patient_1 = __importDefault(require("../models/Patient"));
+const Doctor_1 = __importDefault(require("../models/Doctor"));
+const Polyclinic_1 = __importDefault(require("../models/Polyclinic"));
+const Schedule_1 = __importDefault(require("../models/Schedule"));
+const Queue_1 = __importDefault(require("../models/Queue"));
+const Inventory_1 = __importDefault(require("../models/Inventory"));
+const Bed_1 = __importDefault(require("../models/Bed"));
+const Visit_1 = __importDefault(require("../models/Visit"));
+const User_1 = __importDefault(require("../models/User"));
 // Asumsi ModelHelpers ada dan berfungsi
 const ModelHelpers = {
     generatePolyclinicId: () => `POLI-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
@@ -42,15 +48,13 @@ class EnhancedDataSeeder {
     }
     async createAdminUser() {
         try {
-            // ✅ PERBAIKAN: Hapus require('bcryptjs') karena hashing dilakukan oleh model
-            const existingAdmin = await User.findOne({ email: "admin@sehatify.com" });
+            const existingAdmin = await User_1.default.findOne({ email: "admin@sehatify.com" });
             if (!existingAdmin) {
                 console.log("Mencoba membuat admin baru...");
-                // ✅ PERBAIKAN: Hapus hashing manual. Berikan password teks biasa.
-                const adminUser = new User({
+                const adminUser = new User_1.default({
                     name: "Administrator",
                     email: "admin@sehatify.com",
-                    password: "admin123", // Model akan meng-hash ini secara otomatis
+                    password: "admin123",
                     role: "admin"
                 });
                 await adminUser.save();
@@ -67,14 +71,14 @@ class EnhancedDataSeeder {
     async clearAllData() {
         console.log("🗑️ Clearing existing data...");
         await Promise.all([
-            Visit.deleteMany({}),
-            Queue.deleteMany({}),
-            Schedule.deleteMany({}),
-            Bed.deleteMany({}),
-            Inventory.deleteMany({}),
-            Patient.deleteMany({}),
-            Doctor.deleteMany({}),
-            Polyclinic.deleteMany({}),
+            Visit_1.default.deleteMany({}),
+            Queue_1.default.deleteMany({}),
+            Schedule_1.default.deleteMany({}),
+            Bed_1.default.deleteMany({}),
+            Inventory_1.default.deleteMany({}),
+            Patient_1.default.deleteMany({}),
+            Doctor_1.default.deleteMany({}),
+            Polyclinic_1.default.deleteMany({}),
         ]);
         console.log("✅ All data cleared");
     }
@@ -86,7 +90,7 @@ class EnhancedDataSeeder {
             { name: "Poliklinik Mata", department: "Mata" },
             { name: "Poliklinik Gigi", department: "Gigi" },
         ];
-        await Polyclinic.create(polyclinics.map(p => ({ ...p, polyclinicId: ModelHelpers.generatePolyclinicId(), description: `Pelayanan ${p.name}`, isActive: true })));
+        await Polyclinic_1.default.create(polyclinics.map(p => ({ ...p, polyclinicId: ModelHelpers.generatePolyclinicId(), description: `Pelayanan ${p.name}`, isActive: true })));
         console.log("✅ Polyclinics seeded");
     }
     async seedDoctors() {
@@ -96,7 +100,7 @@ class EnhancedDataSeeder {
             { employeeId: "EMP-003", name: "Dr. Budi Santoso, Sp.A", specialization: "Spesialis Anak", title: "dr. Sp.A" },
             { employeeId: "EMP-004", name: "Dr. Lisa Maharani, Sp.M", specialization: "Spesialis Mata", title: "dr. Sp.M" },
         ];
-        await Doctor.create(doctors.map(d => ({ ...d, doctorId: ModelHelpers.generateDoctorId(), licenseNumber: `STR${d.employeeId}`, joinDate: new Date(), phone: '08123456789', email: `${d.name.split(' ')[1].toLowerCase()}@sehatify.com`, status: 'Active' })));
+        await Doctor_1.default.create(doctors.map(d => ({ ...d, doctorId: ModelHelpers.generateDoctorId(), licenseNumber: `STR${d.employeeId}`, joinDate: new Date(), phone: '08123456789', email: `${d.name.split(' ')[1].toLowerCase()}@sehatify.com`, status: 'Active' })));
         console.log("✅ Doctors seeded");
     }
     async seedPatients() {
@@ -105,7 +109,7 @@ class EnhancedDataSeeder {
             { nik: "3201234567890002", name: "Sari Dewi", gender: "Perempuan" },
             { nik: "3201234567890003", name: "Rudi Hermawan", gender: "Laki-laki" },
         ];
-        await Patient.create(patients.map(p => ({ ...p, patientId: ModelHelpers.generatePatientId(), dateOfBirth: new Date("1990-01-01"), phone: '08123456789', address: 'Jl. Sehat No. 1', emergencyContact: { name: 'Keluarga', relationship: 'Keluarga', phone: '08123456789' } })));
+        await Patient_1.default.create(patients.map(p => ({ ...p, patientId: ModelHelpers.generatePatientId(), dateOfBirth: new Date("1990-01-01"), phone: '08123456789', address: 'Jl. Sehat No. 1', emergencyContact: { name: 'Keluarga', relationship: 'Keluarga', phone: '08123456789' } })));
         console.log("✅ Patients seeded");
     }
     async seedInventory() {
@@ -115,7 +119,7 @@ class EnhancedDataSeeder {
             { name: "Amoxicillin 500mg", category: "Obat", unit: "tablet", unitPrice: 1200 },
             { name: "Masker Medis", category: "Alat Pelindung", unit: "pcs", unitPrice: 1500 },
         ];
-        await Inventory.create(inventoryItems.map(i => ({ ...i, itemId: ModelHelpers.generateItemId(), currentStock: 500, minimumStock: 100, maximumStock: 2000, supplier: 'PT. Sehat Farma' })));
+        await Inventory_1.default.create(inventoryItems.map(i => ({ ...i, itemId: ModelHelpers.generateItemId(), currentStock: 500, minimumStock: 100, maximumStock: 2000, supplier: 'PT. Sehat Farma' })));
         console.log("✅ Inventory seeded");
     }
     async seedBeds() {
@@ -124,12 +128,12 @@ class EnhancedDataSeeder {
             { ward: "General Ward", roomNumber: "GW-101", bedNumber: "101", bedType: "Standard", status: "available", dailyRate: 500000 },
             { ward: "VIP", roomNumber: "VIP-001", bedNumber: "001", bedType: "VIP", status: "occupied", dailyRate: 1500000 },
         ];
-        await Bed.create(beds);
+        await Bed_1.default.create(beds);
         console.log("✅ Beds seeded");
     }
     async seedSchedules() {
-        const doctors = await Doctor.find();
-        const polyclinics = await Polyclinic.find();
+        const doctors = await Doctor_1.default.find();
+        const polyclinics = await Polyclinic_1.default.find();
         if (doctors.length === 0 || polyclinics.length === 0)
             return;
         const schedules = [];
@@ -145,12 +149,12 @@ class EnhancedDataSeeder {
                     schedules.push({ doctorId: doctor._id, polyclinicId: polyclinic._id, date: scheduleDate, startTime: "08:00", endTime: "15:00", totalSlots: 20, bookedSlots: 0, availableSlots: 20, status: "Active" });
             }
         }
-        await Schedule.create(schedules.map(s => ({ ...s, scheduleId: ModelHelpers.generateScheduleId() })));
+        await Schedule_1.default.create(schedules.map(s => ({ ...s, scheduleId: ModelHelpers.generateScheduleId() })));
         console.log("✅ Schedules seeded");
     }
     async seedQueues() {
-        const schedules = await Schedule.find({ date: { $gte: new Date().setHours(0, 0, 0, 0) } }).limit(2);
-        const patients = await Patient.find();
+        const schedules = await Schedule_1.default.find({ date: { $gte: new Date().setHours(0, 0, 0, 0) } }).limit(2);
+        const patients = await Patient_1.default.find();
         if (schedules.length === 0 || patients.length === 0)
             return;
         const queues = [];
@@ -161,13 +165,13 @@ class EnhancedDataSeeder {
                 queues.push({ patientId: patients[i]._id, doctorId: schedule.doctorId, polyclinicId: schedule.polyclinicId, scheduleId: schedule._id, queueNumber: i + 1, queueDate: schedule.date, status: "Waiting" });
             }
         }
-        await Queue.create(queues.map(q => ({ ...q, queueId: ModelHelpers.generateQueueId() })));
+        await Queue_1.default.create(queues.map(q => ({ ...q, queueId: ModelHelpers.generateQueueId() })));
         console.log("✅ Queues seeded");
     }
     async seedVisits() {
-        const patients = await Patient.find();
-        const doctors = await Doctor.find();
-        const polyclinics = await Polyclinic.find();
+        const patients = await Patient_1.default.find();
+        const doctors = await Doctor_1.default.find();
+        const polyclinics = await Polyclinic_1.default.find();
         if (patients.length === 0 || doctors.length === 0 || polyclinics.length === 0) {
             console.log("⚠️ Skipping visit seeding due to missing patient, doctor, or polyclinic data.");
             return;
@@ -197,25 +201,25 @@ class EnhancedDataSeeder {
                 paymentStatus: "Paid",
             });
         }
-        await Visit.create(visits.map(v => ({ ...v, visitId: ModelHelpers.generateVisitId() })));
+        await Visit_1.default.create(visits.map(v => ({ ...v, visitId: ModelHelpers.generateVisitId() })));
         console.log("✅ Visits seeded");
     }
 }
 async function runSeeder() {
     try {
-        await dbConnection.connect();
+        await database_1.default.connect();
         const seeder = new EnhancedDataSeeder();
         await seeder.seedAll();
     }
     catch (error) {
+        // Error sudah dicatat di dalam seeder.seedAll() jika terjadi di sana
+        // jadi tidak perlu log lagi kecuali untuk error koneksi
         console.error("Seeding script failed:", error);
     }
     finally {
         console.log("🔌 Disconnecting from database...");
-        await dbConnection.disconnect();
+        await database_1.default.disconnect();
     }
 }
-if (require.main === module) {
-    runSeeder();
-}
-module.exports = EnhancedDataSeeder;
+// Jalankan skrip
+runSeeder();

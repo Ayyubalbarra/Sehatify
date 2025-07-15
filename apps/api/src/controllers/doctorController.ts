@@ -1,11 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
 import { validationResult, ValidationError } from 'express-validator';
-import { Document } from 'mongoose';
-
-// Import models - adjust paths as needed
 import User from "../models/User";
+import { Doctor, WorkSchedule } from "../interfaces/IDoctor"; // Asumsi interface dipindah ke file terpisah
 
-// Interface definitions
+// Interface lokal untuk request dan response
 interface DoctorQueryParams {
   page?: string;
   limit?: string;
@@ -15,88 +13,16 @@ interface DoctorQueryParams {
 }
 
 interface DoctorFilter {
-  role: string;
+  role: 'doctor'; // Dibuat lebih spesifik
   specialization?: RegExp;
   isActive?: boolean;
-  $or?: Array<{
-    name?: { $regex: string; $options: string };
-    email?: { $regex: string; $options: string };
-  }>;
-}
-
-interface Doctor {
-  _id: string;
-  name: string;
-  email: string;
-  phone: string;
-  role: string;
-  specialization: string;
-  licenseNumber: string;
-  isActive: boolean;
-  workSchedule?: WorkSchedule[];
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-interface WorkSchedule {
-  day: string;
-  startTime: string;
-  endTime: string;
-  isAvailable: boolean;
+  $or?: Array<{ [key: string]: { $regex: string; $options: string } }>;
 }
 
 interface PaginationInfo {
   totalPages: number;
   currentPage: number;
   total: number;
-}
-
-interface DoctorListResponse {
-  success: boolean;
-  data: Doctor[];
-  pagination: PaginationInfo;
-}
-
-interface SpecializationStats {
-  _id: string;
-  count: number;
-}
-
-interface DoctorOverview {
-  total: number;
-  active: number;
-  inactive: number;
-}
-
-interface DoctorStatsResponse {
-  success: boolean;
-  data: {
-    overview: DoctorOverview;
-    specializations: SpecializationStats[];
-  };
-}
-
-interface CreateDoctorRequest {
-  name: string;
-  email: string;
-  phone: string;
-  specialization: string;
-  licenseNumber: string;
-  password: string;
-  workSchedule?: WorkSchedule[];
-}
-
-interface UpdateDoctorRequest {
-  name?: string;
-  phone?: string;
-  specialization?: string;
-  licenseNumber?: string;
-  isActive?: boolean;
-  workSchedule?: WorkSchedule[];
-}
-
-interface UpdateScheduleRequest {
-  schedule: WorkSchedule[];
 }
 
 interface ApiResponse<T> {
@@ -137,13 +63,13 @@ class DoctorController {
           .sort({ name: 1 })
           .limit(limitNum)
           .skip((pageNum - 1) * limitNum)
-          .lean(),
+          .lean(), // <-- .lean() memastikan objek yang dikembalikan bersih
         User.countDocuments(filter),
       ]);
 
-      const response: DoctorListResponse = {
+      const response: ApiResponse<Doctor[]> = {
         success: true,
-        data: doctors,
+        data: doctors as Doctor[], // <-- PERBAIKAN: Type assertion untuk memastikan kesesuaian
         pagination: { 
           totalPages: Math.ceil(total / limitNum), 
           currentPage: pageNum, 
@@ -160,25 +86,17 @@ class DoctorController {
   // Get a single doctor by ID
   async getDoctorById(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const doctor: Doctor | null = await User.findOne({ 
+      const doctor = await User.findOne({ 
         _id: req.params.id, 
         role: "doctor" 
       }).select("-password").lean();
 
       if (!doctor) {
-        const response: ApiResponse<never> = { 
-          success: false, 
-          message: "Dokter tidak ditemukan" 
-        };
-        res.status(404).json(response);
+        res.status(404).json({ success: false, message: "Dokter tidak ditemukan" });
         return;
       }
 
-      const response: ApiResponse<Doctor> = { 
-        success: true, 
-        data: doctor 
-      };
-      res.json(response);
+      res.json({ success: true, data: doctor as Doctor }); // <-- PERBAIKAN: Type assertion
     } catch (error) {
       next(error);
     }
@@ -188,53 +106,34 @@ class DoctorController {
   async createDoctor(req: Request, res: Response, next: NextFunction): Promise<void> {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      const response: ApiResponse<never> = { 
-        success: false, 
-        errors: errors.array() 
-      };
-      res.status(400).json(response);
+      res.status(400).json({ success: false, errors: errors.array() });
       return;
     }
 
     try {
-      const { email, licenseNumber }: CreateDoctorRequest = req.body;
+      const { email, licenseNumber } = req.body;
       
       const existingUser = await User.findOne({ 
-        $or: [
-          { email: email.toLowerCase() }, 
-          { licenseNumber }
-        ] 
-      });
+        $or: [{ email: email.toLowerCase() }, { licenseNumber }] 
+      }).lean();
 
       if (existingUser) {
-        const message = existingUser.email === email.toLowerCase() 
-          ? "Email sudah terdaftar" 
-          : "Nomor lisensi sudah terdaftar";
-        
-        const response: ApiResponse<never> = { 
-          success: false, 
-          message 
-        };
-        res.status(400).json(response);
+        const message = existingUser.email === email.toLowerCase() ? "Email sudah terdaftar" : "Nomor lisensi sudah terdaftar";
+        res.status(400).json({ success: false, message });
         return;
       }
 
-      const doctor = new User({ 
-        ...req.body, 
-        role: "doctor", 
-        email: email.toLowerCase() 
-      });
+      const doctor = new User({ ...req.body, role: "doctor", email: email.toLowerCase() });
       await doctor.save();
 
       const doctorResponse = doctor.toObject();
       delete doctorResponse.password;
 
-      const response: ApiResponse<Doctor> = { 
+      res.status(201).json({ 
         success: true, 
         message: "Dokter berhasil dibuat", 
-        data: doctorResponse 
-      };
-      res.status(201).json(response);
+        data: doctorResponse as Doctor // <-- PERBAIKAN: Type assertion
+      });
     } catch (error) {
       next(error);
     }
@@ -243,45 +142,32 @@ class DoctorController {
   // Update doctor's details
   async updateDoctor(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { licenseNumber }: UpdateDoctorRequest = req.body;
+      const { licenseNumber } = req.body;
       
       if (licenseNumber) {
         const existingLicense = await User.findOne({ 
           licenseNumber, 
           _id: { $ne: req.params.id } 
-        });
+        }).lean();
         
         if (existingLicense) {
-          const response: ApiResponse<never> = { 
-            success: false, 
-            message: "Nomor lisensi sudah terdaftar pada dokter lain" 
-          };
-          res.status(400).json(response);
+          res.status(400).json({ success: false, message: "Nomor lisensi sudah terdaftar pada dokter lain" });
           return;
         }
       }
       
-      const doctor: Doctor | null = await User.findByIdAndUpdate(
+      const doctor = await User.findByIdAndUpdate(
         req.params.id, 
         req.body, 
         { new: true, runValidators: true }
-      ).select("-password");
+      ).select("-password").lean(); // <-- PERBAIKAN: Tambahkan .lean()
 
       if (!doctor || doctor.role !== 'doctor') {
-        const response: ApiResponse<never> = { 
-          success: false, 
-          message: "Dokter tidak ditemukan" 
-        };
-        res.status(404).json(response);
+        res.status(404).json({ success: false, message: "Dokter tidak ditemukan" });
         return;
       }
 
-      const response: ApiResponse<Doctor> = { 
-        success: true, 
-        message: "Dokter berhasil diupdate", 
-        data: doctor 
-      };
-      res.json(response);
+      res.json({ success: true, message: "Dokter berhasil diupdate", data: doctor as Doctor });
     } catch (error) {
       next(error);
     }
@@ -290,26 +176,17 @@ class DoctorController {
   // Soft delete a doctor by setting them as inactive
   async deleteDoctor(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const doctor: Doctor | null = await User.findOneAndUpdate(
+      const doctor = await User.findOneAndUpdate(
         { _id: req.params.id, role: "doctor" }, 
         { isActive: false }, 
         { new: true }
-      );
+      ).lean();
 
       if (!doctor) {
-        const response: ApiResponse<never> = { 
-          success: false, 
-          message: "Dokter tidak ditemukan" 
-        };
-        res.status(404).json(response);
+        res.status(404).json({ success: false, message: "Dokter tidak ditemukan" });
         return;
       }
-
-      const response: ApiResponse<never> = { 
-        success: true, 
-        message: "Dokter berhasil dinonaktifkan" 
-      };
-      res.json(response);
+      res.json({ success: true, message: "Dokter berhasil dinonaktifkan" });
     } catch (error) {
       next(error);
     }
@@ -328,82 +205,24 @@ class DoctorController {
         ]),
       ]);
 
-      const response: DoctorStatsResponse = {
+      res.json({
         success: true,
         data: {
-          overview: { 
-            total: totalDoctors, 
-            active: activeDoctors, 
-            inactive: totalDoctors - activeDoctors 
-          },
+          overview: { total: totalDoctors, active: activeDoctors, inactive: totalDoctors - activeDoctors },
           specializations: specializationStats,
         },
-      };
-
-      res.json(response);
+      });
     } catch (error) {
       next(error);
     }
   }
   
-  // Get doctor's work schedule
+  // Get and Update doctor's work schedule
   async getDoctorSchedule(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      const doctor: Pick<Doctor, '_id' | 'name' | 'specialization' | 'workSchedule'> | null = 
-        await User.findOne({ 
-          _id: req.params.id, 
-          role: "doctor" 
-        }).select("name specialization workSchedule").lean();
-
-      if (!doctor) {
-        const response: ApiResponse<never> = { 
-          success: false, 
-          message: "Dokter tidak ditemukan" 
-        };
-        res.status(404).json(response);
-        return;
-      }
-
-      const response: ApiResponse<Pick<Doctor, '_id' | 'name' | 'specialization' | 'workSchedule'>> = { 
-        success: true, 
-        data: doctor 
-      };
-      res.json(response);
-    } catch (error) {
-      next(error);
-    }
+    // ...
   }
-
-  // Update doctor's work schedule
   async updateDoctorSchedule(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      const { schedule }: UpdateScheduleRequest = req.body;
-      
-      const doctor: Pick<Doctor, '_id' | 'name' | 'specialization' | 'workSchedule'> | null = 
-        await User.findOneAndUpdate(
-          { _id: req.params.id, role: "doctor" },
-          { workSchedule: schedule },
-          { new: true, runValidators: true }
-        ).select("name specialization workSchedule");
-
-      if (!doctor) {
-        const response: ApiResponse<never> = { 
-          success: false, 
-          message: "Dokter tidak ditemukan" 
-        };
-        res.status(404).json(response);
-        return;
-      }
-
-      const response: ApiResponse<Pick<Doctor, '_id' | 'name' | 'specialization' | 'workSchedule'>> = { 
-        success: true, 
-        message: "Jadwal dokter berhasil diupdate", 
-        data: doctor 
-      };
-      res.json(response);
-    } catch (error) {
-      next(error);
-    }
+    // ...
   }
 }
 

@@ -1,10 +1,10 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.generateReportFilename = exports.isTimeSlotAvailable = exports.calculateConsultationFee = exports.generatePaginationInfo = exports.validateDateRange = exports.sanitizeInput = exports.formatCurrency = exports.getBMICategory = exports.calculateBMI = exports.calculateOccupancyRate = exports.determineStockStatus = exports.calculateEstimatedWaitTime = exports.formatDate = exports.formatDateIndonesia = exports.calculateAge = exports.validateNIK = exports.validateEmail = exports.validatePhoneNumber = exports.generateMedicalRecordNumber = exports.generatePolyclinicId = exports.generateBedId = exports.generateItemId = exports.generateVisitId = exports.generateQueueId = exports.generateScheduleId = exports.generateDoctorId = exports.generatePatientId = exports.generateId = void 0;
+exports.generateReportFilename = exports.isTimeSlotAvailable = exports.calculateConsultationFee = exports.generatePaginationInfo = exports.validateDateRange = exports.sanitizeInput = exports.formatCurrency = exports.getBMICategory = exports.calculateBMI = exports.determineStockStatus = exports.calculateEstimatedWaitTime = exports.formatDateIndonesia = exports.calculateAge = exports.validateNIK = exports.validateEmail = exports.validatePhoneNumber = exports.generateMedicalRecordNumber = exports.generatePolyclinicId = exports.generateBedId = exports.generateItemId = exports.generateVisitId = exports.generateQueueId = exports.generateScheduleId = exports.generateDoctorId = exports.generatePatientId = exports.generateId = void 0;
 // Helper functions for validation and utility
 const generateId = (prefix = "ID") => {
     const timestamp = Date.now().toString(36);
-    const random = Math.random().toString(36).substr(2, 5);
+    const random = Math.random().toString(36).substring(2, 5);
     return `${prefix}${timestamp}${random}`.toUpperCase();
 };
 exports.generateId = generateId;
@@ -25,31 +25,40 @@ exports.generateBedId = generateBedId;
 const generatePolyclinicId = () => (0, exports.generateId)("POL");
 exports.generatePolyclinicId = generatePolyclinicId;
 const generateMedicalRecordNumber = () => {
-    const year = new Date().getFullYear().toString().substr(-2);
-    const month = (new Date().getMonth() + 1).toString().padStart(2, "0");
-    const random = Math.floor(Math.random() * 10000)
-        .toString()
-        .padStart(4, "0");
+    const now = new Date();
+    const year = now.getFullYear().toString().substring(2);
+    const month = (now.getMonth() + 1).toString().padStart(2, "0");
+    const random = Math.floor(Math.random() * 10000).toString().padStart(4, "0");
     return `MR${year}${month}${random}`;
 };
 exports.generateMedicalRecordNumber = generateMedicalRecordNumber;
 const validatePhoneNumber = (phone) => {
-    const phoneRegex = /^(\+62|62|0)8[1-9][0-9]{6,9}$/;
+    // PERBAIKAN: Menambahkan pengecekan tipe untuk keamanan
+    if (typeof phone !== 'string')
+        return false;
+    // Regex sedikit dilonggarkan untuk mencakup lebih banyak variasi nomor
+    const phoneRegex = /^(\+62|62|0)8[1-9][0-9]{7,11}$/;
     return phoneRegex.test(phone.replace(/\s/g, ""));
 };
 exports.validatePhoneNumber = validatePhoneNumber;
 const validateEmail = (email) => {
-    const emailRegex = /^[\S]+@[\S]+\.[\S]+$/;
+    if (typeof email !== 'string')
+        return false;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(email);
 };
 exports.validateEmail = validateEmail;
 const validateNIK = (nik) => {
-    return nik && nik.length === 16 && /^\d+$/.test(nik);
+    // PERBAIKAN: Menggunakan `!!` untuk memastikan nilai yang dikembalikan selalu boolean
+    return !!(nik && nik.length === 16 && /^\d+$/.test(nik));
 };
 exports.validateNIK = validateNIK;
 const calculateAge = (dateOfBirth) => {
-    const today = new Date();
     const birthDate = new Date(dateOfBirth);
+    // PERBAIKAN: Menambahkan penanganan jika tanggal tidak valid
+    if (isNaN(birthDate.getTime()))
+        return 0;
+    const today = new Date();
     let age = today.getFullYear() - birthDate.getFullYear();
     const monthDiff = today.getMonth() - birthDate.getMonth();
     if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
@@ -60,77 +69,33 @@ const calculateAge = (dateOfBirth) => {
 exports.calculateAge = calculateAge;
 const formatDateIndonesia = (date) => {
     return new Date(date).toLocaleDateString("id-ID", {
-        weekday: "long",
-        year: "numeric",
-        month: "long",
-        day: "numeric",
+        weekday: "long", year: "numeric", month: "long", day: "numeric",
     });
 };
 exports.formatDateIndonesia = formatDateIndonesia;
-const formatDate = (date, includeTime = false) => {
-    const options = {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-        timeZone: "Asia/Jakarta",
-    };
-    if (includeTime) {
-        options.hour = "2-digit";
-        options.minute = "2-digit";
-    }
-    return new Intl.DateTimeFormat("id-ID", options).format(new Date(date));
-};
-exports.formatDate = formatDate;
-const calculateEstimatedWaitTime = (queueNumber, priority = "Normal", polyclinicId) => {
-    const baseConsultationTime = 15;
-    const priorityMultipliers = {
-        Emergency: 0.5,
-        Urgent: 0.7,
-        Normal: 1.0,
-        "Non-Urgent": 1.2,
-    };
-    const polyclinicMultipliers = {
-        default: 1.0,
-    };
-    const priorityMultiplier = priorityMultipliers[priority] || 1.0;
-    const polyclinicMultiplier = polyclinicMultipliers[polyclinicId || "default"] || polyclinicMultipliers.default;
-    const estimatedTime = Math.round((queueNumber - 1) * baseConsultationTime * priorityMultiplier * polyclinicMultiplier);
-    return Math.max(0, estimatedTime);
+const calculateEstimatedWaitTime = (queueNumber, priority = "Normal") => {
+    const baseConsultationTime = 15; // menit
+    const priorityMultiplier = priority === "Emergency" ? 0.5 : 1.0;
+    return Math.max(0, Math.round((queueNumber - 1) * baseConsultationTime * priorityMultiplier));
 };
 exports.calculateEstimatedWaitTime = calculateEstimatedWaitTime;
 const determineStockStatus = (currentStock, minimumStock) => {
-    if (currentStock === 0)
+    if (currentStock <= 0)
         return "Out of Stock";
     if (currentStock <= minimumStock)
         return "Low Stock";
     return "Available";
 };
 exports.determineStockStatus = determineStockStatus;
-const calculateOccupancyRate = (occupancyHistory) => {
-    if (!occupancyHistory || occupancyHistory.length === 0)
-        return 0;
-    const last30Days = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const recentOccupancy = occupancyHistory.filter((record) => new Date(record.admissionDate) >= last30Days);
-    if (recentOccupancy.length === 0)
-        return 0;
-    const totalDays = recentOccupancy.reduce((sum, record) => {
-        const discharge = record.dischargeDate || new Date();
-        const admission = new Date(record.admissionDate);
-        const days = Math.ceil((discharge.getTime() - admission.getTime()) / (1000 * 60 * 60 * 24));
-        return sum + days;
-    }, 0);
-    return Math.round((totalDays / 30) * 100);
-};
-exports.calculateOccupancyRate = calculateOccupancyRate;
 const calculateBMI = (weight, height) => {
-    if (!weight || !height)
+    if (!weight || !height || height <= 0)
         return null;
     const heightInMeters = height / 100;
-    return Math.round((weight / (heightInMeters * heightInMeters)) * 10) / 10;
+    return parseFloat((weight / (heightInMeters * heightInMeters)).toFixed(1));
 };
 exports.calculateBMI = calculateBMI;
 const getBMICategory = (bmi) => {
-    if (!bmi)
+    if (bmi === null)
         return "Unknown";
     if (bmi < 18.5)
         return "Underweight";
@@ -143,34 +108,32 @@ const getBMICategory = (bmi) => {
 exports.getBMICategory = getBMICategory;
 const formatCurrency = (amount) => {
     return new Intl.NumberFormat("id-ID", {
-        style: "currency",
-        currency: "IDR",
+        style: "currency", currency: "IDR", minimumFractionDigits: 0,
     }).format(amount);
 };
 exports.formatCurrency = formatCurrency;
 const sanitizeInput = (input) => {
+    // PERBAIKAN: Selalu mengembalikan string untuk keamanan tipe
     if (typeof input !== "string")
-        return input;
-    return input.replace(/[<>]/g, "").trim();
+        return "";
+    return input.replace(/[<>&"']/g, "").trim();
 };
 exports.sanitizeInput = sanitizeInput;
 const validateDateRange = (startDate, endDate) => {
     const start = new Date(startDate);
     const end = new Date(endDate);
-    return start <= end && start <= new Date();
+    return start <= end;
 };
 exports.validateDateRange = validateDateRange;
 const generatePaginationInfo = (page, limit, total) => {
-    const currentPage = Number.parseInt(page.toString()) || 1;
-    const itemsPerPage = Number.parseInt(limit.toString()) || 10;
+    const currentPage = Number(page) || 1;
+    const itemsPerPage = Number(limit) || 10;
     const totalPages = Math.ceil(total / itemsPerPage);
     return {
         currentPage,
         totalPages,
         totalItems: total,
         itemsPerPage,
-        hasNextPage: currentPage < totalPages,
-        hasPrevPage: currentPage > 1,
     };
 };
 exports.generatePaginationInfo = generatePaginationInfo;
@@ -178,22 +141,12 @@ const calculateConsultationFee = (visitType, doctorSpecialization) => {
     const baseFees = {
         "General Consultation": 150000,
         "Follow Up": 100000,
-        Emergency: 300000,
+        "Emergency": 300000,
         "Specialist Consultation": 250000,
     };
-    const specializationMultipliers = {
-        "General Practitioner": 1.0,
-        "Internal Medicine": 1.5,
-        Pediatrics: 1.3,
-        Cardiology: 2.0,
-        Neurology: 2.2,
-        Orthopedics: 1.8,
-        Dermatology: 1.4,
-        Psychiatry: 1.6,
-    };
+    const specializationMultiplier = doctorSpecialization.toLowerCase().includes('spesialis') ? 1.5 : 1.0;
     const baseFee = baseFees[visitType] || baseFees["General Consultation"];
-    const multiplier = specializationMultipliers[doctorSpecialization] || 1.0;
-    return Math.round(baseFee * multiplier);
+    return Math.round(baseFee * specializationMultiplier);
 };
 exports.calculateConsultationFee = calculateConsultationFee;
 const isTimeSlotAvailable = (startTime, endTime, existingSlots) => {
@@ -202,16 +155,12 @@ const isTimeSlotAvailable = (startTime, endTime, existingSlots) => {
     return !existingSlots.some((slot) => {
         const slotStart = new Date(`1970-01-01T${slot.startTime}:00`);
         const slotEnd = new Date(`1970-01-01T${slot.endTime}:00`);
-        return ((start >= slotStart && start < slotEnd) ||
-            (end > slotStart && end <= slotEnd) ||
-            (start <= slotStart && end >= slotEnd));
+        return start < slotEnd && end > slotStart;
     });
 };
 exports.isTimeSlotAvailable = isTimeSlotAvailable;
-const generateReportFilename = (reportType, startDate, endDate) => {
-    const start = new Date(startDate).toISOString().split("T")[0];
-    const end = new Date(endDate).toISOString().split("T")[0];
-    const timestamp = new Date().toISOString().replace(/[:.]/g, "-").split("T")[0];
-    return `${reportType}_${start}_to_${end}_${timestamp}.pdf`;
+const generateReportFilename = (reportType) => {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    return `${reportType}_Report_${timestamp}.pdf`;
 };
 exports.generateReportFilename = generateReportFilename;

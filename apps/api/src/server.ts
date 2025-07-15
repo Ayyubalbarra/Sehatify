@@ -4,10 +4,11 @@ import cors from "cors";
 import http from "http";
 import { Server } from "socket.io";
 import dbConnection from "./config/database";
+import listEndpoints from 'express-list-endpoints'; // <-- 1. Impor library debug
 
-// Impor semua rute, termasuk rute baru untuk pasien
+// Impor semua rute
 import authRoutes from "./routes/authRoutes";
-import patientAuthRoutes from "./routes/patientAuthRoutes"; // <-- PERUBAHAN: Impor rute pasien
+import patientAuthRoutes from "./routes/patientAuthRoutes";
 import queueRoutes from "./routes/queueRoutes";
 import dashboardRoutes from "./routes/dashboardRoutes";
 import aiRoutes from "./routes/aiRoutes";
@@ -48,8 +49,8 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Pendaftaran Rute API
-app.use(`${API_BASE_PATH}/auth`, authRoutes); // Rute untuk Admin/Staf
-app.use(`${API_BASE_PATH}/patient`, patientAuthRoutes); // <-- PERUBAHAN: Daftarkan rute baru untuk Pasien
+app.use(`${API_BASE_PATH}/auth`, authRoutes);
+app.use(`${API_BASE_PATH}/patient`, patientAuthRoutes);
 app.use(`${API_BASE_PATH}/queues`, queueRoutes);
 app.use(`${API_BASE_PATH}/dashboard`, dashboardRoutes);
 app.use(`${API_BASE_PATH}/ai`, aiRoutes);
@@ -61,6 +62,14 @@ app.use(`${API_BASE_PATH}/polyclinics`, polyclinicRoutes);
 app.use(`${API_BASE_PATH}/schedules`, scheduleRoutes);
 app.use(`${API_BASE_PATH}/seed`, seedRoutes);
 app.use(`${API_BASE_PATH}/visits`, visitRoutes);
+
+
+// ================== KODE DEBUGGING ==================
+console.log("==================== REGISTERED ENDPOINTS ====================");
+console.log(listEndpoints(app));
+console.log("============================================================");
+// ======================================================================
+
 
 // Global Error Handler
 app.use((error: any, req: Request, res: Response, next: NextFunction) => {

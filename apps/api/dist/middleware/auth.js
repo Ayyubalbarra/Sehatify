@@ -3,30 +3,44 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.authorizeRoles = exports.authenticateToken = void 0;
+exports.optionalAuth = exports.authorizeRoles = exports.authenticateToken = void 0;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const User_1 = __importDefault(require("../models/User"));
 // Middleware untuk memverifikasi token
 const authenticateToken = async (req, res, next) => {
     try {
         const authHeader = req.headers['authorization'];
-        const token = authHeader && authHeader.split(' ')[1];
+        const token = authHeader?.split(' ')[1];
         if (!token) {
-            return res.status(401).json({ success: false, message: "Akses ditolak. Token tidak disediakan." });
+            res.status(401).json({
+                success: false,
+                message: "Akses ditolak. Token tidak disediakan."
+            });
+            return;
         }
         const secret = process.env.JWT_SECRET;
         if (!secret) {
             throw new Error('JWT_SECRET tidak diatur di file .env');
         }
+        // Verifikasi token dengan type assertion yang aman
         const decoded = jsonwebtoken_1.default.verify(token, secret);
         if (typeof decoded !== 'object' || !decoded.userId) {
-            return res.status(401).json({ success: false, message: "Format token tidak valid." });
+            res.status(401).json({
+                success: false,
+                message: "Format token tidak valid."
+            });
+            return;
         }
+        // Cari user berdasarkan ID dari token
         const user = await User_1.default.findById(decoded.userId).select('role isActive');
         if (!user || !user.isActive) {
-            return res.status(401).json({ success: false, message: "Token tidak valid atau akun tidak aktif." });
+            res.status(401).json({
+                success: false,
+                message: "Token tidak valid atau akun tidak aktif."
+            });
+            return;
         }
-        // [FIX] Menggunakan user._id yang benar, bukan user.id
+        // Set user info ke request object
         req.user = {
             userId: user._id.toString(),
             role: user.role,
@@ -34,11 +48,12 @@ const authenticateToken = async (req, res, next) => {
         next();
     }
     catch (error) {
-        if (error.name === 'TokenExpiredError') {
-            return res.status(401).json({ success: false, message: 'Token sudah kedaluwarsa.' });
-        }
-        if (error.name === 'JsonWebTokenError') {
-            return res.status(401).json({ success: false, message: 'Token tidak valid.' });
+        if (error instanceof jsonwebtoken_1.default.JsonWebTokenError) {
+            res.status(401).json({
+                success: false,
+                message: error.message === 'jwt expired' ? 'Token sudah kedaluwarsa.' : 'Token tidak valid.'
+            });
+            return;
         }
         next(error);
     }
@@ -47,13 +62,42 @@ exports.authenticateToken = authenticateToken;
 // Middleware untuk otorisasi berdasarkan peran
 const authorizeRoles = (...roles) => {
     return (req, res, next) => {
-        if (!req.user?.role) {
-            return res.status(403).json({ success: false, message: "Akses ditolak. Role tidak terdefinisi." });
-        }
-        if (!roles.includes(req.user.role)) {
-            return res.status(403).json({ success: false, message: "Akses ditolak. Anda tidak memiliki izin yang cukup." });
+        if (!req.user?.role || !roles.includes(req.user.role)) {
+            res.status(403).json({
+                success: false,
+                message: "Akses ditolak. Anda tidak memiliki izin yang cukup."
+            });
+            return;
         }
         next();
     };
 };
 exports.authorizeRoles = authorizeRoles;
+// Middleware opsional untuk mendapatkan info user tanpa mewajibkan otentikasi
+const optionalAuth = async (req, res, next) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        const token = authHeader?.split(' ')[1];
+        if (token) {
+            const secret = process.env.JWT_SECRET;
+            if (secret) {
+                const decoded = jsonwebtoken_1.default.verify(token, secret);
+                if (typeof decoded === 'object' && decoded.userId) {
+                    const user = await User_1.default.findById(decoded.userId).select('role isActive');
+                    if (user && user.isActive) {
+                        req.user = {
+                            userId: user._id.toString(),
+                            role: user.role,
+                        };
+                    }
+                }
+            }
+        }
+        next();
+    }
+    catch (error) {
+        // Jika token ada tapi tidak valid, abaikan dan lanjutkan tanpa user info
+        next();
+    }
+};
+exports.optionalAuth = optionalAuth;

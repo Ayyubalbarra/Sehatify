@@ -2,6 +2,7 @@ import { type Request, type Response, type NextFunction } from 'express';
 import Patient, { type IPatient } from "../models/Patient";
 import Visit from "../models/Visit";
 import Queue from "../models/Queue";
+// PERBAIKAN: Mengimpor semua helper yang dibutuhkan dari modelHelpers
 import { validateNIK, calculateAge } from "../utils/modelHelpers";
 
 // Definisikan tipe untuk query parameter agar lebih aman
@@ -37,13 +38,14 @@ class PatientController {
           .sort({ registrationDate: -1 })
           .limit(limitNum)
           .skip((pageNum - 1) * limitNum)
-          .lean<IPatient[]>(), // Menggunakan .lean<IPatient[]>() untuk mendapatkan objek JS biasa dengan tipe yang benar
+          .lean<IPatient[]>(), // Menggunakan .lean() memastikan hasil adalah objek biasa
         Patient.countDocuments(query),
       ]);
       
+      // Menambahkan properti 'age' ke setiap objek pasien
       const patientsWithAge = patients.map(p => ({
         ...p, 
-        age: ModelHelpers.calculateAge(p.dateOfBirth)
+        age: calculateAge(p.dateOfBirth) // <-- PERBAIKAN: Fungsi helper sekarang dikenali
       }));
 
       res.json({ 
@@ -71,7 +73,7 @@ class PatientController {
         }
         
         const recentVisits = await Visit.find({ patientId: patient._id }).sort({ visitDate: -1 }).limit(5).lean();
-        const lifetimeValue = recentVisits.reduce((sum, visit: any) => sum + (visit.totalCost || 0), 0);
+        const lifetimeValue = recentVisits.reduce((sum, visit) => sum + (visit.totalCost || 0), 0);
 
         res.json({ 
             success: true, 
@@ -110,17 +112,17 @@ class PatientController {
   async createPatient(req: Request, res: Response, next: NextFunction) {
     try {
       const { nik } = req.body;
-      if (!ModelHelpers.validateNIK(nik)) {
+      if (!validateNIK(nik)) { // <-- PERBAIKAN: Fungsi helper sekarang dikenali
         return res.status(400).json({ success: false, message: "Format NIK tidak valid" });
       }
-      const existingPatient = await Patient.findOne({ nik });
+      const existingPatient = await Patient.findOne({ nik }).lean();
       if (existingPatient) {
         return res.status(400).json({ success: false, message: "NIK sudah terdaftar" });
       }
 
       const patient = new Patient(req.body);
       await patient.save();
-      res.status(201).json({ success: true, message: "Pasien berhasil ditambahkan", data: patient });
+      res.status(201).json({ success: true, message: "Pasien berhasil ditambahkan", data: patient.toObject() });
     } catch (error) {
       next(error);
     }
@@ -129,7 +131,7 @@ class PatientController {
   // Update a patient's data
   async updatePatient(req: Request, res: Response, next: NextFunction) {
     try {
-      const patient = await Patient.findOneAndUpdate({ patientId: req.params.patientId }, req.body, { new: true, runValidators: true });
+      const patient = await Patient.findOneAndUpdate({ patientId: req.params.patientId }, req.body, { new: true, runValidators: true }).lean();
       if (!patient) {
         return res.status(404).json({ success: false, message: "Pasien tidak ditemukan" });
       }
@@ -142,7 +144,7 @@ class PatientController {
   // Delete a patient
   async deletePatient(req: Request, res: Response, next: NextFunction) {
     try {
-      const patient = await Patient.findOne({ patientId: req.params.patientId });
+      const patient = await Patient.findOne({ patientId: req.params.patientId }).lean();
       if (!patient) {
         return res.status(404).json({ success: false, message: "Pasien tidak ditemukan" });
       }
@@ -153,7 +155,7 @@ class PatientController {
       ]);
 
       if (activeVisits > 0 || activeQueues > 0) {
-        return res.status(400).json({ success: false, message: "Tidak dapat menghapus pasien dengan kunjungan/antrian aktif" });
+        return res.status(400).json({ success: false, message: "Tidak dapat menghapus pasien dengan kunjungan atau antrian aktif" });
       }
 
       await Patient.findOneAndDelete({ patientId: req.params.patientId });

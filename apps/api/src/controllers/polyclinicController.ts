@@ -5,6 +5,14 @@ import User from "../models/User"; // Menggunakan model User untuk dokter
 import Visit from "../models/Visit";
 import { generatePolyclinicId } from "../utils/modelHelpers";
 import { AuthRequest } from '../middleware/auth';
+import { IPolyclinic } from '../interfaces/IPolyclinic'; // Asumsikan Anda punya interface ini
+import { Doctor } from '../interfaces/IDoctor';
+
+// Definisikan tipe untuk statistik
+interface PolyclinicStats {
+  monthlyVisits: number;
+  activeDoctors: number;
+}
 
 class PolyclinicController {
   // Get all polyclinics with filtering and pagination
@@ -21,15 +29,22 @@ class PolyclinicController {
           .sort({ name: 1 })
           .limit(Number(limit))
           .skip((Number(page) - 1) * Number(limit))
-          .lean(),
+          .lean(), // <-- Perbaikan
         Polyclinic.countDocuments(query),
       ]);
       
       const polyclinicsWithStats = await Promise.all(
-          polyclinics.map(async (poly: any) => ({ ...poly, stats: await this.getPolyclinicStats(poly._id) }))
+          polyclinics.map(async (poly) => {
+              const stats = await this.getPolyclinicStats(poly._id);
+              return { ...poly, stats };
+          })
       );
 
-      res.json({ success: true, data: polyclinicsWithStats, pagination: { totalPages: Math.ceil(total / Number(limit)), currentPage: Number(page), total } });
+      res.json({ 
+          success: true, 
+          data: polyclinicsWithStats, 
+          pagination: { totalPages: Math.ceil(total / Number(limit)), currentPage: Number(page), total } 
+      });
     } catch (error) {
       next(error);
     }
@@ -38,17 +53,21 @@ class PolyclinicController {
   // Get a single polyclinic by ID
   public async getPolyclinicById(req: Request, res: Response, next: NextFunction) {
     try {
-      const polyclinic = await Polyclinic.findById(req.params.id).lean();
+      const polyclinic = await Polyclinic.findById(req.params.id).lean(); // <-- Perbaikan
       if (!polyclinic) {
         return res.status(404).json({ success: false, message: "Poliklinik tidak ditemukan" });
       }
       
+      // Menggunakan `polyclinic.name` untuk mencari dokter berdasarkan spesialisasi
       const [stats, doctors] = await Promise.all([
           this.getPolyclinicStats(req.params.id),
-          User.find({ role: 'doctor', specialization: polyclinic.name, isActive: true }).select("name").lean()
+          User.find({ role: 'doctor', specialization: polyclinic.name, isActive: true }).select("name specialization").lean()
       ]);
 
-      res.json({ success: true, data: { ...polyclinic, stats, doctors } });
+      res.json({ 
+          success: true, 
+          data: { ...polyclinic, stats, doctors: doctors as Doctor[] } 
+      });
     } catch (error) {
       next(error);
     }
@@ -57,10 +76,14 @@ class PolyclinicController {
   // Create a new polyclinic
   public async createPolyclinic(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const polyclinicData = { ...req.body, polyclinicId: generatePolyclinicId(), createdBy: req.user?.userId };
+      const polyclinicData = { ...req.body, polyclinicId: generatePolyclinicId(), createdBy: req.user?._id };
       const polyclinic = new Polyclinic(polyclinicData);
       await polyclinic.save();
-      res.status(201).json({ success: true, message: "Poliklinik berhasil ditambahkan", data: polyclinic });
+      res.status(201).json({ 
+          success: true, 
+          message: "Poliklinik berhasil ditambahkan", 
+          data: polyclinic.toObject() as IPolyclinic // <-- Perbaikan
+      });
     } catch (error: any) {
       if (error.code === 11000) {
         return res.status(400).json({ success: false, message: `Nama atau ID poliklinik sudah digunakan` });
@@ -72,12 +95,16 @@ class PolyclinicController {
   // Update polyclinic's details
   public async updatePolyclinic(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const updateData = { ...req.body, updatedBy: req.user?.userId, updatedAt: new Date() };
-      const polyclinic = await Polyclinic.findByIdAndUpdate(req.params.id, updateData, { new: true, runValidators: true });
+      const updateData = { ...req.body, updatedBy: req.user?._id };
+      const polyclinic = await Polyclinic.findByIdAndUpdate(req.params.id, updateData, { new: true, runValidators: true }).lean(); // <-- Perbaikan
       if (!polyclinic) {
         return res.status(404).json({ success: false, message: "Poliklinik tidak ditemukan" });
       }
-      res.json({ success: true, message: "Data poliklinik berhasil diperbarui", data: polyclinic });
+      res.json({ 
+          success: true, 
+          message: "Data poliklinik berhasil diperbarui", 
+          data: polyclinic as IPolyclinic // <-- Perbaikan
+        });
     } catch (error) {
       next(error);
     }
@@ -86,7 +113,7 @@ class PolyclinicController {
   // Soft delete a polyclinic
   public async deletePolyclinic(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const updateData = { isActive: false, updatedBy: req.user?.userId, updatedAt: new Date() };
+      const updateData = { isActive: false, updatedBy: req.user?._id };
       const polyclinic = await Polyclinic.findByIdAndUpdate(req.params.id, updateData, { new: true });
       if (!polyclinic) {
         return res.status(404).json({ success: false, message: "Poliklinik tidak ditemukan" });
@@ -108,11 +135,14 @@ class PolyclinicController {
   }
   
   // Helper to get stats for a polyclinic
-  private async getPolyclinicStats(polyclinicId: Types.ObjectId | string) {
+  private async getPolyclinicStats(polyclinicId: Types.ObjectId | string): Promise<PolyclinicStats> {
     try {
+        const polyclinicObjectId = new Types.ObjectId(polyclinicId);
+        
         const [monthlyVisits, activeDoctors] = await Promise.all([
-            Visit.countDocuments({ polyclinicId, visitDate: { $gte: new Date(new Date().setDate(1)) } }),
-            User.countDocuments({ role: 'doctor', polyclinicId, isActive: true }) // Ini mungkin perlu disesuaikan jika dokter tidak langsung terhubung ke poliklinik
+            Visit.countDocuments({ polyclinicId: polyclinicObjectId, visitDate: { $gte: new Date(new Date().setDate(1)) } }),
+            // Asumsi dokter tidak langsung terikat ke ID poliklinik, tetapi melalui nama spesialisasinya
+            User.countDocuments({ role: 'doctor', specialization: { $exists: true }, isActive: true }) 
         ]);
         return { monthlyVisits, activeDoctors };
     } catch (error) {

@@ -1,10 +1,12 @@
 import { Request, Response, NextFunction } from 'express';
+import { Types } from 'mongoose';
 import Schedule from "../models/Schedule";
 import Queue from "../models/Queue";
-import User from "../models/User"; // Menggunakan model User
+import User from "../models/User";
 import Polyclinic from "../models/Polyclinic";
 import { generateScheduleId } from "../utils/modelHelpers";
 import { AuthRequest } from '../middleware/auth';
+import { ISchedule } from '../interfaces/ISchedule'; // Asumsikan Anda punya interface ini
 
 class ScheduleController {
   // Get all schedules with filtering and pagination
@@ -18,7 +20,10 @@ class ScheduleController {
       if (status) query.status = status;
       if (date) {
         const searchDate = new Date(date as string);
-        query.date = { $gte: new Date(searchDate.setHours(0, 0, 0, 0)), $lt: new Date(new Date(date as string).setHours(23, 59, 59, 999)) };
+        searchDate.setHours(0, 0, 0, 0);
+        const nextDate = new Date(searchDate);
+        nextDate.setDate(searchDate.getDate() + 1);
+        query.date = { $gte: searchDate, $lt: nextDate };
       }
 
       const [schedules, total] = await Promise.all([
@@ -28,7 +33,7 @@ class ScheduleController {
           .sort({ date: 1, startTime: 1 })
           .limit(Number(limit))
           .skip((Number(page) - 1) * Number(limit))
-          .lean(),
+          .lean<ISchedule[]>(), // <-- Perbaikan
         Schedule.countDocuments(query),
       ]);
       
@@ -41,9 +46,11 @@ class ScheduleController {
   // Get a single schedule by ID with its queue list
   public async getScheduleById(req: Request, res: Response, next: NextFunction) {
     try {
+      const scheduleId = new Types.ObjectId(req.params.id);
+
       const [schedule, queues] = await Promise.all([
-        Schedule.findById(req.params.id).populate("doctorId", "name").populate("polyclinicId", "name").lean(),
-        Queue.find({ scheduleId: req.params.id }).populate("patientId", "name").sort({ queueNumber: 1 }).lean(),
+        Schedule.findById(scheduleId).populate("doctorId", "name").populate("polyclinicId", "name").lean<ISchedule>(),
+        Queue.find({ scheduleId }).populate("patientId", "name patientId").sort({ queueNumber: 1 }).lean(),
       ]);
 
       if (!schedule) {
@@ -58,25 +65,47 @@ class ScheduleController {
   // Create a new schedule
   public async createSchedule(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const { doctorId, date, startTime, endTime } = req.body;
+      const { doctorId, polyclinicId, date, startTime, endTime } = req.body;
+
       const [doctor, polyclinic] = await Promise.all([
-          User.findOne({ _id: doctorId, role: 'doctor' }),
-          Polyclinic.findById(req.body.polyclinicId)
+          User.findOne({ _id: doctorId, role: 'doctor' }).lean(),
+          Polyclinic.findById(polyclinicId).lean()
       ]);
       
       if (!doctor) return res.status(404).json({ success: false, message: "Dokter tidak ditemukan" });
       if (!polyclinic) return res.status(404).json({ success: false, message: "Poliklinik tidak ditemukan" });
 
-      const conflict = await Schedule.findOne({ doctorId, date: new Date(date), $or: [{ startTime: { $lt: endTime }, endTime: { $gt: startTime } }] });
+      const scheduleDate = new Date(date);
+      const conflict = await Schedule.findOne({ 
+        doctorId, 
+        date: scheduleDate, 
+        // Cek jika ada jadwal yang tumpang tindih
+        $or: [
+          { startTime: { $lt: endTime }, endTime: { $gt: startTime } }
+        ]
+      });
+      
       if (conflict) {
         return res.status(400).json({ success: false, message: "Dokter sudah memiliki jadwal yang berbenturan pada waktu tersebut" });
       }
 
-      const schedule = new Schedule({ ...req.body, scheduleId: generateScheduleId(), createdBy: req.user?.userId, availableSlots: req.body.totalSlots });
+      const scheduleData = { 
+        ...req.body, 
+        scheduleId: generateScheduleId(), 
+        createdBy: req.user?._id, 
+        availableSlots: req.body.totalSlots,
+        bookedSlots: 0 // Inisialisasi bookedSlots
+      };
+
+      const schedule = new Schedule(scheduleData);
       await schedule.save();
 
-      await schedule.populate([{ path: "doctorId", select: "name" }, { path: "polyclinicId", select: "name" }]);
-      res.status(201).json({ success: true, message: "Jadwal berhasil ditambahkan", data: schedule });
+      const populatedSchedule = await schedule.populate([
+        { path: "doctorId", select: "name specialization" }, 
+        { path: "polyclinicId", select: "name" }
+      ]);
+      
+      res.status(201).json({ success: true, message: "Jadwal berhasil ditambahkan", data: populatedSchedule.toObject() });
     } catch (error) {
       next(error);
     }
@@ -90,32 +119,41 @@ class ScheduleController {
         return res.status(404).json({ success: false, message: "Jadwal tidak ditemukan" });
       }
 
-      const updateData: any = { ...req.body, updatedBy: req.user?.userId, updatedAt: new Date() };
-      if (req.body.totalSlots) {
-        updateData.availableSlots = req.body.totalSlots - schedule.bookedSlots;
-        if (updateData.availableSlots < 0) return res.status(400).json({ success: false, message: "Total slot tidak boleh kurang dari slot yang sudah dibooking" });
+      const updateData: any = { ...req.body, updatedBy: req.user?._id };
+
+      if (req.body.totalSlots !== undefined) {
+        const newTotalSlots = Number(req.body.totalSlots);
+        if (newTotalSlots < schedule.bookedSlots) {
+          return res.status(400).json({ success: false, message: "Total slot tidak boleh kurang dari slot yang sudah dipesan." });
+        }
+        updateData.availableSlots = newTotalSlots - schedule.bookedSlots;
       }
 
-      const updatedSchedule = await Schedule.findByIdAndUpdate(req.params.id, updateData, { new: true }).populate("doctorId", "name").populate("polyclinicId", "name");
+      const updatedSchedule = await Schedule.findByIdAndUpdate(req.params.id, updateData, { new: true })
+        .populate("doctorId", "name")
+        .populate("polyclinicId", "name")
+        .lean<ISchedule>(); // <-- Perbaikan
+
       res.json({ success: true, message: "Jadwal berhasil diperbarui", data: updatedSchedule });
     } catch (error) {
       next(error);
     }
   }
 
-  // Cancel a schedule
+  // Cancel a schedule (Soft delete)
   public async deleteSchedule(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const queueCount = await Queue.countDocuments({ scheduleId: req.params.id });
+      const scheduleId = new Types.ObjectId(req.params.id);
+      const queueCount = await Queue.countDocuments({ scheduleId });
       if (queueCount > 0) {
-        return res.status(400).json({ success: false, message: "Tidak dapat membatalkan jadwal yang sudah memiliki antrian" });
+        return res.status(400).json({ success: false, message: "Tidak dapat membatalkan jadwal yang sudah memiliki antrian terdaftar." });
       }
 
-      const schedule = await Schedule.findByIdAndUpdate(req.params.id, { status: "Cancelled", updatedBy: req.user?.userId }, { new: true });
+      const schedule = await Schedule.findByIdAndUpdate(scheduleId, { status: "Cancelled", updatedBy: req.user?._id }, { new: true });
       if (!schedule) {
         return res.status(404).json({ success: false, message: "Jadwal tidak ditemukan" });
       }
-      res.json({ success: true, message: "Jadwal berhasil dibatalkan" });
+      res.json({ success: true, message: "Jadwal berhasil dibatalkan." });
     } catch (error) {
       next(error);
     }
@@ -126,15 +164,20 @@ class ScheduleController {
     try {
       const { doctorId, date } = req.query;
       if (!doctorId || !date) {
-        return res.status(400).json({ success: false, message: "Doctor ID dan tanggal harus diisi" });
+        return res.status(400).json({ success: false, message: "ID Dokter dan tanggal harus diisi." });
       }
+
       const searchDate = new Date(date as string);
+      searchDate.setHours(0, 0, 0, 0);
+      const nextDate = new Date(searchDate);
+      nextDate.setDate(searchDate.getDate() + 1);
+
       const schedules = await Schedule.find({
         doctorId,
-        date: { $gte: new Date(searchDate.setHours(0, 0, 0, 0)), $lt: new Date(new Date(date as string).setHours(23, 59, 59, 999)) },
+        date: { $gte: searchDate, $lt: nextDate },
         status: "Active",
         availableSlots: { $gt: 0 }
-      }).populate("polyclinicId", "name").lean();
+      }).populate("polyclinicId", "name").lean<ISchedule[]>();
       
       res.json({ success: true, data: schedules });
     } catch (error) {

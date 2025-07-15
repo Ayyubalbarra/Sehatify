@@ -8,9 +8,11 @@ const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const http_1 = __importDefault(require("http"));
 const socket_io_1 = require("socket.io");
-const database_1 = __importDefault(require("./config/database")); // <-- Diperbaiki
-// Impor Rute (juga diperbaiki)
+const database_1 = __importDefault(require("./config/database"));
+const express_list_endpoints_1 = __importDefault(require("express-list-endpoints")); // <-- 1. Impor library debug
+// Impor semua rute
 const authRoutes_1 = __importDefault(require("./routes/authRoutes"));
+const patientAuthRoutes_1 = __importDefault(require("./routes/patientAuthRoutes"));
 const queueRoutes_1 = __importDefault(require("./routes/queueRoutes"));
 const dashboardRoutes_1 = __importDefault(require("./routes/dashboardRoutes"));
 const aiRoutes_1 = __importDefault(require("./routes/aiRoutes"));
@@ -38,10 +40,13 @@ io.on("connection", (socket) => {
     console.log(`✅ User connected via WebSocket: ${socket.id}`);
     socket.on("disconnect", () => console.log(`❌ User disconnected: ${socket.id}`));
 });
+// Middleware
 app.use((0, cors_1.default)(corsOptions));
 app.use(express_1.default.json());
 app.use(express_1.default.urlencoded({ extended: true }));
+// Pendaftaran Rute API
 app.use(`${API_BASE_PATH}/auth`, authRoutes_1.default);
+app.use(`${API_BASE_PATH}/patient`, patientAuthRoutes_1.default);
 app.use(`${API_BASE_PATH}/queues`, queueRoutes_1.default);
 app.use(`${API_BASE_PATH}/dashboard`, dashboardRoutes_1.default);
 app.use(`${API_BASE_PATH}/ai`, aiRoutes_1.default);
@@ -53,12 +58,19 @@ app.use(`${API_BASE_PATH}/polyclinics`, polyclinicRoutes_1.default);
 app.use(`${API_BASE_PATH}/schedules`, scheduleRoutes_1.default);
 app.use(`${API_BASE_PATH}/seed`, seedRoutes_1.default);
 app.use(`${API_BASE_PATH}/visits`, visitRoutes_1.default);
+// ================== KODE DEBUGGING ==================
+console.log("==================== REGISTERED ENDPOINTS ====================");
+console.log((0, express_list_endpoints_1.default)(app));
+console.log("============================================================");
+// ======================================================================
+// Global Error Handler
 app.use((error, req, res, next) => {
     console.error("❌ Global Error Handler:", error.message);
     const status = error.statusCode || 500;
     const message = error.message || "Terjadi kesalahan pada server.";
     res.status(status).json({ success: false, message });
 });
+// Fungsi untuk memulai server
 async function startServer() {
     try {
         console.log("🔌 Menghubungkan ke database...");

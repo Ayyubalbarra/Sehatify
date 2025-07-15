@@ -10,20 +10,27 @@ class DashboardController {
         try {
             const today = new Date();
             today.setHours(0, 0, 0, 0);
-            const [visitCount, queueCount, emergencyCount] = await Promise.all([
-                Visit_1.default.countDocuments({ visitDate: { $gte: today } }),
-                Queue_1.default.countDocuments({ queueDate: { $gte: today } }),
-                Queue_1.default.countDocuments({ queueDate: { $gte: today }, priority: "Emergency" }),
+            const tomorrow = new Date(today);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            const [visitCount, queueStats] = await Promise.all([
+                Visit_1.default.countDocuments({ visitDate: { $gte: today, $lt: tomorrow } }),
+                Queue_1.default.aggregate([
+                    { $match: { queueDate: { $gte: today, $lt: tomorrow } } },
+                    {
+                        $group: {
+                            _id: null,
+                            total: { $sum: 1 },
+                            emergency: { $sum: { $cond: [{ $eq: ["$priority", "Emergency"] }, 1, 0] } }
+                        }
+                    }
+                ])
             ]);
-            const response = {
-                success: true,
-                data: {
-                    todayVisits: visitCount,
-                    todayQueues: queueCount,
-                    todayEmergencies: emergencyCount
-                }
+            const responseData = {
+                todayVisits: visitCount,
+                todayQueues: queueStats[0]?.total || 0,
+                todayEmergencies: queueStats[0]?.emergency || 0
             };
-            res.json(response);
+            res.json({ success: true, data: responseData });
         }
         catch (error) {
             next(error);
@@ -35,6 +42,7 @@ class DashboardController {
             today.setHours(0, 0, 0, 0);
             const tomorrow = new Date(today);
             tomorrow.setDate(tomorrow.getDate() + 1);
+            // PERBAIKAN: Menambahkan .lean() untuk memastikan tipe data sesuai
             const queues = await Queue_1.default.find({
                 queueDate: { $gte: today, $lt: tomorrow }
             })
@@ -42,16 +50,23 @@ class DashboardController {
                 .populate("polyclinicId", "name")
                 .sort({ queueNumber: 1 })
                 .lean();
-            const summary = {
-                waiting: queues.filter((q) => q.status === "Waiting").length,
-                inProgress: queues.filter((q) => q.status === "In Progress").length,
-                completed: queues.filter((q) => q.status === "Completed").length,
-            };
-            const response = {
+            const summary = queues.reduce((acc, queue) => {
+                if (queue.status === "Waiting")
+                    acc.waiting++;
+                else if (queue.status === "In Progress")
+                    acc.inProgress++;
+                else if (queue.status === "Completed")
+                    acc.completed++;
+                return acc;
+            }, { waiting: 0, inProgress: 0, completed: 0 });
+            res.json({
                 success: true,
-                data: { totalQueues: queues.length, summary, queues },
-            };
-            res.json(response);
+                data: {
+                    totalQueues: queues.length,
+                    summary,
+                    queues: queues // PERBAIKAN: Type assertion untuk meyakinkan TypeScript
+                },
+            });
         }
         catch (error) {
             next(error);
@@ -59,11 +74,11 @@ class DashboardController {
     }
     async getChartData(req, res, next) {
         try {
-            const { type } = req.query;
+            const { type = "weekly-patients" } = req.query;
             let chartData;
             if (type === "weekly-patients") {
                 const labels = [];
-                const data = [];
+                const dataPromises = [];
                 for (let i = 6; i >= 0; i--) {
                     const date = new Date();
                     date.setDate(date.getDate() - i);
@@ -72,11 +87,11 @@ class DashboardController {
                     startOfDay.setHours(0, 0, 0, 0);
                     const endOfDay = new Date(date);
                     endOfDay.setHours(23, 59, 59, 999);
-                    const count = await Visit_1.default.countDocuments({
+                    dataPromises.push(Visit_1.default.countDocuments({
                         visitDate: { $gte: startOfDay, $lt: endOfDay },
-                    });
-                    data.push(count);
+                    }));
                 }
+                const data = await Promise.all(dataPromises);
                 chartData = {
                     labels,
                     datasets: [{
@@ -87,65 +102,21 @@ class DashboardController {
                 };
             }
             else {
-                const errorResponse = {
-                    success: false,
-                    message: "Tipe chart tidak valid"
-                };
-                res.status(400).json(errorResponse);
+                res.status(400).json({ success: false, message: "Tipe chart tidak valid" });
                 return;
             }
-            const response = {
-                success: true,
-                data: chartData
-            };
-            res.json(response);
+            res.json({ success: true, data: chartData });
         }
         catch (error) {
             next(error);
         }
     }
     // --- Metode Placeholder ---
-    async getPatientStats(req, res, next) {
-        const response = {
-            success: true,
-            message: "Patient stats endpoint"
-        };
-        res.json(response);
-    }
-    async getAppointmentStats(req, res, next) {
-        const response = {
-            success: true,
-            message: "Appointment stats endpoint"
-        };
-        res.json(response);
-    }
-    async getRevenueStats(req, res, next) {
-        const response = {
-            success: true,
-            message: "Revenue stats endpoint"
-        };
-        res.json(response);
-    }
-    async getInventoryStats(req, res, next) {
-        const response = {
-            success: true,
-            message: "Inventory stats endpoint"
-        };
-        res.json(response);
-    }
-    async getRecentActivities(req, res, next) {
-        const response = {
-            success: true,
-            message: "Recent activities endpoint"
-        };
-        res.json(response);
-    }
-    async getSystemHealth(req, res, next) {
-        const response = {
-            success: true,
-            message: "System health endpoint"
-        };
-        res.json(response);
-    }
+    async getPatientStats(req, res, next) { res.json({ success: true }); }
+    async getAppointmentStats(req, res, next) { res.json({ success: true }); }
+    async getRevenueStats(req, res, next) { res.json({ success: true }); }
+    async getInventoryStats(req, res, next) { res.json({ success: true }); }
+    async getRecentActivities(req, res, next) { res.json({ success: true }); }
+    async getSystemHealth(req, res, next) { res.json({ success: true }); }
 }
 exports.default = new DashboardController();
