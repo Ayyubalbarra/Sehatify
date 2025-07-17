@@ -1,14 +1,14 @@
-import dotenv from "dotenv";
+// apps/api/src/server.ts
+
 import express, { type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
 import http from "http";
 import { Server } from "socket.io";
 import dbConnection from "./config/database";
-import listEndpoints from 'express-list-endpoints'; // <-- 1. Impor library debug
+import listEndpoints from 'express-list-endpoints';
 
 // Impor semua rute
 import authRoutes from "./routes/authRoutes";
-import patientAuthRoutes from "./routes/patientAuthRoutes";
 import queueRoutes from "./routes/queueRoutes";
 import dashboardRoutes from "./routes/dashboardRoutes";
 import aiRoutes from "./routes/aiRoutes";
@@ -20,8 +20,8 @@ import polyclinicRoutes from "./routes/polyclinicRoutes";
 import scheduleRoutes from "./routes/scheduleRoutes";
 import seedRoutes from "./routes/seedRoutes";
 import visitRoutes from "./routes/visitRoutes";
-
-dotenv.config();
+import settingRoutes from "./routes/settingRoutes";
+import hospitalRoutes from "./routes/hospitalRoutes"; // ✅ 1. Impor rute baru
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -31,7 +31,7 @@ const server = http.createServer(app);
 
 const corsOptions = {
   origin: process.env.FRONTEND_URL?.split(',').map(url => url.trim()),
-  methods: ["GET", "POST", "PUT", "DELETE"],
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
   credentials: true,
 };
 
@@ -50,7 +50,6 @@ app.use(express.urlencoded({ extended: true }));
 
 // Pendaftaran Rute API
 app.use(`${API_BASE_PATH}/auth`, authRoutes);
-app.use(`${API_BASE_PATH}/patient`, patientAuthRoutes);
 app.use(`${API_BASE_PATH}/queues`, queueRoutes);
 app.use(`${API_BASE_PATH}/dashboard`, dashboardRoutes);
 app.use(`${API_BASE_PATH}/ai`, aiRoutes);
@@ -62,13 +61,8 @@ app.use(`${API_BASE_PATH}/polyclinics`, polyclinicRoutes);
 app.use(`${API_BASE_PATH}/schedules`, scheduleRoutes);
 app.use(`${API_BASE_PATH}/seed`, seedRoutes);
 app.use(`${API_BASE_PATH}/visits`, visitRoutes);
-
-
-// ================== KODE DEBUGGING ==================
-console.log("==================== REGISTERED ENDPOINTS ====================");
-console.log(listEndpoints(app));
-console.log("============================================================");
-// ======================================================================
+app.use(`${API_BASE_PATH}/settings`, settingRoutes);
+app.use(`${API_BASE_PATH}/hospitals`, hospitalRoutes); // ✅ 2. Daftarkan rute baru
 
 
 // Global Error Handler
@@ -87,6 +81,10 @@ async function startServer() {
     server.listen(PORT, () => {
       console.log(`🚀 Server berjalan di port ${PORT}`);
       console.log(`📡 Rute API tersedia di path: ${API_BASE_PATH}`);
+
+      console.log("==================== REGISTERED ENDPOINTS ====================");
+      console.log(listEndpoints(app));
+      console.log("============================================================");
     });
   } catch (error) {
     console.error("❌ Gagal memulai server:", error);

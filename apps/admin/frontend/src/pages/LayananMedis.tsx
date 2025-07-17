@@ -1,3 +1,5 @@
+// apps/admin/frontend/src/pages/LayananMedis.tsx
+
 "use client"
 
 import type React from "react"
@@ -6,45 +8,55 @@ import { useQuery } from "@tanstack/react-query"
 import { Plus, Eye, Edit, Stethoscope, Calendar, Clock, Loader2, Search, Filter } from "lucide-react"
 import MetricCard from "../components/Dashboard/MetricCard"
 import DataTable from "../components/DataTable/DataTable"
-
-interface MedicalService {
-  _id: string;
-  serviceId: string;
-  name: string;
-  department: string;
-  doctor: string;
-  operatingHours: string;
-  location: string;
-  status: "Active" | "Inactive";
-  price: number;
-}
-
-const mockServicesData = {
-  success: true,
-  data: {
-    services: [
-      { _id: "1", serviceId: "SVC001", name: "Poliklinik Umum", department: "Umum", doctor: "Dr. Ahmad Wijaya", operatingHours: "08:00 - 16:00", location: "Gedung A, Lt. 1", status: "Active" as const, price: 50000 },
-      { _id: "2", serviceId: "SVC002", name: "Poliklinik Jantung", department: "Spesialis", doctor: "Dr. Sarah Putri, Sp.JP", operatingHours: "08:00 - 15:00", location: "Gedung B, Lt. 2", status: "Active" as const, price: 150000 },
-      { _id: "3", serviceId: "SVC003", name: "Poliklinik Anak", department: "Spesialis", doctor: "Dr. Budi Santoso, Sp.A", operatingHours: "08:00 - 16:00", location: "Gedung A, Lt. 2", status: "Inactive" as const, price: 100000 },
-    ],
-    stats: { totalServices: 8, activeToday: 12, averageWaitTime: 20 },
-    pagination: { currentPage: 1, totalPages: 1, totalItems: 3 },
-  },
+import { polyclinicAPI } from "../services/api"
+import type { PolyclinicData, PolyclinicsApiResponse } from "../types"
+// Sesuaikan interface MedicalService agar cocok dengan PolyclinicData dari API
+interface MedicalService extends PolyclinicData {
+  doctor?: string; // Nama dokter PJ (Primary Doctor/PIC)
+  operatingHoursDisplay?: string; // Format jam operasional untuk tampilan
+  price?: number; // Jika ada field harga di model Polyclinic atau dihitung
+  // polyclinicId sudah ada dari PolyclinicData, tidak perlu dideklarasikan ulang di sini
 }
 
 const LayananMedis: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState("")
-  const [filterDepartment, setFilterDepartment] = useState("all")
+  const [filterDepartment, setFilterDepartment] = useState("all") // 'all' atau nama department (dari Polyclinic.name)
   const [currentPage, setCurrentPage] = useState(1)
+  const pageSize = 10; // Sesuaikan dengan limit default di backend
 
-  const { data: servicesData, isLoading } = useQuery({
-    queryKey: ["medical-services", currentPage, searchTerm, filterDepartment],
-    queryFn: async () => mockServicesData, // Ganti dengan fetch API Anda
-    initialData: mockServicesData,
+  // Query untuk mendapatkan data Poliklinik dari API
+  const { data: polyclinicsResponse, isLoading } = useQuery<PolyclinicsApiResponse>({
+    queryKey: ["medical-services", currentPage, searchTerm, filterDepartment, pageSize],
+    queryFn: () => polyclinicAPI.getAllPolyclinics(currentPage, pageSize, searchTerm, filterDepartment === "all" ? "" : filterDepartment),
   })
 
-  const data = servicesData?.data || mockServicesData.data
-  const stats = data.stats
+  // Data yang akan ditampilkan di DataTable
+  const data = polyclinicsResponse?.data || [];
+  const pagination = polyclinicsResponse?.pagination || { currentPage: 1, totalPages: 1, total: 0 };
+
+  // Data statistik (sementara mock atau perlu endpoint baru di backend)
+  // Anda mungkin perlu endpoint API terpisah untuk mendapatkan statistik ini.
+  // Contoh: polyclinicAPI.getPolyclinicStats()
+  const stats = {
+    totalServices: pagination.total, // Total layanan adalah total poliklinik
+    activeToday: 0, // Ini perlu dihitung dari backend (misal: jumlah jadwal aktif hari ini)
+    averageWaitTime: 0, // Ini perlu dihitung dari backend (misal: dari data antrean)
+  };
+
+  // Transformasi data Poliklinik dari backend agar sesuai dengan MedicalService
+  const transformedServices: MedicalService[] = data.map(poly => ({
+    ...poly, // <-- PERBAIKAN: Sertakan semua properti dari `poly`
+    // Kemudian override atau tambahkan properti khusus MedicalService
+    doctor: poly.assignedDoctors && poly.assignedDoctors.length > 0 && 
+            (poly.assignedDoctors[0].doctorId as any)?.name 
+              ? (poly.assignedDoctors[0].doctorId as any).name
+              : "Belum Ditentukan",
+    // PERBAIKAN: Pastikan operatingHoursDisplay selalu menghasilkan string yang diformat
+    operatingHoursDisplay: poly.operatingHours?.monday?.isOpen 
+                           ? `${poly.operatingHours.monday.start} - ${poly.operatingHours.monday.end}` 
+                           : "N/A", 
+    price: (poly as any).price || 0, // Cast to any untuk mengakses price jika tidak ada di PolyclinicData resmi
+  }));
 
   const columns = [
     { key: "name", label: "Layanan", render: (service: MedicalService) => (
@@ -54,9 +66,14 @@ const LayananMedis: React.FC = () => {
         </div>
       ),
     },
-    { key: "doctor", label: "Dokter PJ", render: (service: MedicalService) => <span className="text-sm text-slate-600">{service.doctor}</span> },
-    { key: "operatingHours", label: "Jam Operasional", render: (service: MedicalService) => <span className="text-sm text-slate-600">{service.operatingHours}</span> },
-    { key: "price", label: "Tarif", render: (service: MedicalService) => <span className="font-semibold text-slate-800">Rp {service.price.toLocaleString("id-ID")}</span> },
+    { key: "doctor", label: "Dokter PJ", render: (service: MedicalService) => <span className="text-sm text-slate-600">{service.doctor || "N/A"}</span> },
+    { 
+      key: "operatingHoursDisplay", 
+      label: "Jam Operasional", 
+      // PERBAIKAN: Hanya render operatingHoursDisplay yang sudah string
+      render: (service: MedicalService) => <span className="text-sm text-slate-600">{service.operatingHoursDisplay || "N/A"}</span> 
+    },
+    { key: "price", label: "Tarif", render: (service: MedicalService) => <span className="font-semibold text-slate-800">Rp {service.price ? service.price.toLocaleString("id-ID") : "N/A"}</span> },
     { key: "status", label: "Status", render: (service: MedicalService) => (
         <span className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-wider ${service.status === 'Active' ? 'bg-green-100/60 text-green-700' : 'bg-slate-100 text-slate-600'}`}>{service.status}</span>
       ),
@@ -109,12 +126,12 @@ const LayananMedis: React.FC = () => {
         </div>
         <DataTable
           columns={columns}
-          data={data.services}
+          data={transformedServices}
           loading={isLoading}
           pagination={{
-            currentPage: data.pagination.currentPage,
-            totalPages: data.pagination.totalPages,
-            totalItems: data.pagination.totalItems,
+            currentPage: pagination.currentPage,
+            totalPages: pagination.totalPages,
+            totalItems: pagination.total,
             onPageChange: setCurrentPage,
           }}
         />

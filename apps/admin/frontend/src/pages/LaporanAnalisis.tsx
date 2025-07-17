@@ -1,22 +1,29 @@
+// apps/admin/frontend/src/pages/LaporanAnalisis.tsx
+
 "use client"
 
 import type React from "react"
 import { useState } from "react"
-import { BarChart3, TrendingUp, Download, Calendar, Filter } from "lucide-react"
+import { BarChart3, TrendingUp, Download, Calendar, Filter, Loader2 } from "lucide-react"
+import { useQuery } from "@tanstack/react-query"
 import MetricCard from "../components/Dashboard/MetricCard"
-import ChartCard from "../components/Dashboard/ChartCard"
-// Hapus import CSS yang menyebabkan error
-// import "./DataPages.css"
-
+import HealthTrendChart from "../components/charts/HealthTrendChart" 
+import HealthMetricsChart from "../components/charts/HealthMetricsChart" 
+import { dashboardAPI } from "../services/api" 
+import type { 
+  ApiResponse,
+  DashboardOverviewApiData, 
+  ChartDataForRecharts, 
+  FinancialSummaryData, 
+  ServiceDistributionData 
+} from '../types'
 const LaporanAnalisis: React.FC = () => {
-  const [dateRange, setDateRange] = useState("30d")
+  // Sisa kode tidak perlu diubah...
+  const [dateRange, setDateRange] = useState("30d") 
   const [reportType, setReportType] = useState("overview")
 
   const reportTypes = [
     { key: "overview", label: "Overview" },
-    { key: "patients", label: "Pasien" },
-    { key: "services", label: "Layanan" },
-    { key: "inventory", label: "Inventaris" },
     { key: "financial", label: "Keuangan" },
   ]
 
@@ -27,22 +34,42 @@ const LaporanAnalisis: React.FC = () => {
     { key: "1y", label: "1 Tahun Terakhir" },
   ]
 
-  // Mock data untuk chart
-  const lineChartData = {
-    labels: ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"],
-    datasets: [{ label: "Kunjungan", data: [165, 189, 180, 181, 156, 155, 140], borderColor: "#3B82F6", backgroundColor: "rgba(59, 130, 246, 0.1)", fill: true, tension: 0.4 }],
-  }
-  const barChartData = {
-    labels: ["Umum", "Jantung", "Anak", "Mata", "Gigi"],
-    datasets: [{ label: "Jumlah Pasien", data: [45, 28, 32, 15, 22], backgroundColor: ["#3B82F6", "#8B5CF6", "#10B981", "#F59E0B", "#EF4444"], borderRadius: 4 }],
-  }
-  
+  const { data: overviewResponse, isLoading: isLoadingOverview } = useQuery<ApiResponse<DashboardOverviewApiData>>({
+    queryKey: ['dashboardOverview', dateRange],
+    queryFn: () => dashboardAPI.getOverview(dateRange), 
+  });
+  const overviewData = overviewResponse?.data; 
+
+  const { data: patientTrendResponse, isLoading: isLoadingPatientTrend } = useQuery<ApiResponse<ChartDataForRecharts[]>>({
+    queryKey: ['patientTrendChart', dateRange],
+    queryFn: () => dashboardAPI.getChartData('weekly-patients', dateRange), 
+  });
+  const patientTrendData = patientTrendResponse?.data || []; 
+
+  const { data: serviceDistributionResponse, isLoading: isLoadingServiceDistribution } = useQuery<ApiResponse<ServiceDistributionData[]>>({
+    queryKey: ['serviceDistributionChart', dateRange],
+    queryFn: () => dashboardAPI.getServiceDistribution(dateRange), 
+  });
+  const serviceDistributionData = serviceDistributionResponse?.data || []; 
+
+  const { data: financialSummaryResponse, isLoading: isLoadingFinancial } = useQuery<ApiResponse<FinancialSummaryData>>({
+    queryKey: ['financialSummary', dateRange],
+    queryFn: () => dashboardAPI.getFinancialSummary(dateRange), 
+  });
+  const financial = financialSummaryResponse?.data;
+
+  const totalVisits = overviewData?.totalVisits || 0;
+  const avgDaily = overviewData?.averageDaily || 0;
+  const occupancyRate = overviewData?.occupancyRate || 0;
+
   const summaryData = [
-      {label: "Total Pendapatan", value: "Rp 2,450,000,000", change: "+12.5%", changeColor: "text-green-600"},
-      {label: "Biaya Operasional", value: "Rp 1,850,000,000", change: "+5.2%", changeColor: "text-red-600"},
-      {label: "Profit Margin", value: "24.5%", change: "+2.1%", changeColor: "text-green-600"},
-      {label: "Kepuasan Pasien", value: "4.2/5.0", change: "+0.3", changeColor: "text-green-600"},
+    {label: "Total Pendapatan", value: `Rp ${financial?.totalRevenue?.toLocaleString('id-ID') || '0'}`, change: "+12.5%", changeColor: "text-green-600"},
+    {label: "Biaya Operasional", value: `Rp ${financial?.operationalCost?.toLocaleString('id-ID') || '0'}`, change: "+5.2%", changeColor: "text-red-600"},
+    {label: "Profit Margin", value: `${((financial?.profitMargin || 0) * 100).toFixed(1)}%`, change: "+2.1%", changeColor: "text-green-600"},
+    {label: "Kepuasan Pasien", value: `${financial?.patientSatisfaction?.toFixed(1) || '0'}/5.0`, change: "+0.3", changeColor: "text-green-600"},
   ]
+  
+  const overallLoading = isLoadingOverview || isLoadingPatientTrend || isLoadingServiceDistribution || isLoadingFinancial;
 
   return (
     <div className="space-y-6">
@@ -76,41 +103,50 @@ const LaporanAnalisis: React.FC = () => {
             {dateRanges.map((range) => (<option key={range.key} value={range.key}>{range.label}</option>))}
           </select>
         </div>
-        <button className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 md:w-auto">
+        <button className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">
           <Filter size={16} />
           <span>Filter Lanjutan</span>
         </button>
       </div>
 
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        <MetricCard title="Total Kunjungan" value="1,247" icon={TrendingUp} color="blue" trend="up" trendValue="+15.3%" />
-        <MetricCard title="Rata-rata Harian" value="178" icon={Calendar} color="green" trend="up" trendValue="+8.2%" />
-        <MetricCard title="Tingkat Okupansi" value="82%" icon={BarChart3} color="purple" trend="up" trendValue="+3.1%" />
-      </div>
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <ChartCard title="Tren Kunjungan Pasien" type="line" data={lineChartData} />
-        <ChartCard title="Distribusi Layanan" type="bar" data={barChartData} />
-      </div>
-
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex items-center justify-between p-4 border-b border-slate-100">
-            <h3 className="font-semibold text-slate-800">Detail Laporan Keuangan</h3>
-            <button className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition-colors hover:bg-slate-50">
-                <Download size={14} />
-                Export Excel
-            </button>
+      {overallLoading ? (
+        <div className="flex h-64 items-center justify-center">
+          <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
+          <p className="ml-4 text-slate-500">Memuat laporan...</p>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
-            {summaryData.map(item => (
-                <div key={item.label} className="p-4 border-b md:border-b-0 md:border-r border-slate-100 last:border-0">
-                    <p className="text-sm text-slate-500">{item.label}</p>
-                    <p className="text-xl font-bold text-slate-800">{item.value}</p>
-                    <p className={`text-sm font-semibold ${item.changeColor}`}>{item.change}</p>
-                </div>
-            ))}
-        </div>
-      </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            <MetricCard title="Total Kunjungan" value={totalVisits.toLocaleString('id-ID')} icon={TrendingUp} color="blue" trend="up" trendValue="+15.3%" />
+            <MetricCard title="Rata-rata Harian" value={avgDaily.toLocaleString('id-ID')} icon={Calendar} color="green" trend="up" trendValue="+8.2%" />
+            <MetricCard title="Tingkat Okupansi" value={`${occupancyRate.toFixed(1)}%`} icon={BarChart3} color="purple" trend="up" trendValue="+3.1%" />
+          </div>
+
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <HealthTrendChart title="Tren Kunjungan Pasien" data={patientTrendData} dataKey="value" strokeColor="#3B82F6" />
+            <HealthMetricsChart title="Distribusi Layanan" type="bar" data={serviceDistributionData} />
+          </div>
+
+          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+            <div className="flex items-center justify-between p-4 border-b border-slate-100">
+                <h3 className="font-semibold text-slate-800">Detail Laporan Keuangan</h3>
+                <button className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition-colors hover:bg-slate-50">
+                    <Download size={14} />
+                    Export Excel
+                </button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
+                {summaryData.map(item => (
+                    <div key={item.label} className="p-4 border-b md:border-b-0 md:border-r border-slate-100 last:border-0">
+                        <p className="text-sm text-slate-500">{item.label}</p>
+                        <p className="text-xl font-bold text-slate-800">{item.value}</p>
+                        <p className={`text-sm font-semibold ${item.changeColor}`}>{item.change}</p>
+                    </div>
+                ))}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }

@@ -2,7 +2,6 @@
 
 import mongoose, { Document, Schema, Model } from 'mongoose';
 
-// Interface untuk properti Polyclinic
 export interface IPolyclinic extends Document {
   polyclinicId: string;
   name: string;
@@ -10,16 +9,6 @@ export interface IPolyclinic extends Document {
   description?: string;
   operatingHours?: {
     [day: string]: { start?: string; end?: string; isOpen?: boolean };
-  };
-  capacity?: {
-    maxPatientsPerDay?: number;
-    maxPatientsPerHour?: number;
-  };
-  facilities?: string[];
-  location?: {
-    building?: string;
-    floor?: string;
-    room?: string;
   };
   assignedDoctors?: {
     doctorId?: Schema.Types.ObjectId;
@@ -30,14 +19,8 @@ export interface IPolyclinic extends Document {
     }[];
   }[];
   status: 'Active' | 'Maintenance' | 'Closed';
-  monthlyStats?: {
-    totalPatients?: number;
-    averageWaitTime?: number;
-    satisfactionRating?: number;
-  };
 }
 
-// Skema Mongoose
 const polyclinicSchema: Schema<IPolyclinic> = new Schema(
   {
     polyclinicId: { type: String, unique: true, index: true },
@@ -45,10 +28,7 @@ const polyclinicSchema: Schema<IPolyclinic> = new Schema(
     department: {
       type: String,
       required: true,
-      enum: [
-        "Umum", "Spesialis", "Gigi", "Mata", "THT", "Kulit", "Jantung", "Paru",
-        "Saraf", "Bedah", "Kandungan", "Anak", "Psikiatri", "Gizi", "Rehabilitasi",
-      ],
+      enum: [ "Umum", "Spesialis", "Gigi", "Mata", "THT", "Kulit", "Jantung", "Paru", "Saraf", "Bedah", "Kandungan", "Anak", "Psikiatri", "Gizi", "Rehabilitasi" ],
     },
     description: String,
     operatingHours: {
@@ -60,19 +40,9 @@ const polyclinicSchema: Schema<IPolyclinic> = new Schema(
       saturday: { start: String, end: String, isOpen: Boolean },
       sunday: { start: String, end: String, isOpen: Boolean },
     },
-    capacity: {
-      maxPatientsPerDay: Number,
-      maxPatientsPerHour: Number,
-    },
-    facilities: [String],
-    location: {
-      building: String,
-      floor: String,
-      room: String,
-    },
     assignedDoctors: [
       {
-        doctorId: { type: Schema.Types.ObjectId, ref: "User" }, // Ganti ref ke User
+        doctorId: { type: Schema.Types.ObjectId, ref: "User" }, 
         schedule: [
           {
             day: String,
@@ -86,11 +56,6 @@ const polyclinicSchema: Schema<IPolyclinic> = new Schema(
       type: String,
       enum: ["Active", "Maintenance", "Closed"],
       default: "Active",
-    },
-    monthlyStats: {
-      totalPatients: { type: Number, default: 0 },
-      averageWaitTime: { type: Number, default: 0 },
-      satisfactionRating: { type: Number, default: 0 },
     },
   },
   {

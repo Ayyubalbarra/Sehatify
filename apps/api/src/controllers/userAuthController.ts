@@ -8,7 +8,7 @@ import { AuthRequest } from '../middleware/auth';
 
 const generateToken = (userId: string): string => {
   const secret = process.env.JWT_SECRET;
-  const expiresIn = process.env.JWT_EXPIRES_IN || '7d';
+  const expiresIn = process.env.JWT_EXPIRES_IN || '7d'; 
 
   if (!secret) {
     console.error('JWT_SECRET tidak terdefinisi di file .env');
@@ -16,13 +16,25 @@ const generateToken = (userId: string): string => {
   }
 
   const options: SignOptions = {
-    expiresIn: expiresIn,
+    expiresIn: expiresIn, 
   };
   
   return jwt.sign({ userId }, secret, options);
 };
 
 class UserAuthController {
+    
+  // ✅ TAMBAHKAN CONSTRUCTOR UNTUK BIND 'THIS'
+  constructor() {
+    this.login = this.login.bind(this);
+    this.demoLogin = this.demoLogin.bind(this);
+    this.getProfile = this.getProfile.bind(this);
+    this.updateProfile = this.updateProfile.bind(this);
+    this.changePassword = this.changePassword.bind(this);
+    this.logout = this.logout.bind(this);
+    this.verifyToken = this.verifyToken.bind(this);
+  }
+
   public async login(req: Request, res: Response, next: NextFunction): Promise<void> {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -120,7 +132,7 @@ class UserAuthController {
         return;
       }
 
-      const { name, email, specialization } = req.body;
+      const { name, email, phone, specialization, twoFactorEnabled, notifications } = req.body;
       
       if (email && email.toLowerCase() !== req.user.email.toLowerCase()) {
         const existingUser = await User.findOne({ email: email.toLowerCase() });
@@ -130,9 +142,20 @@ class UserAuthController {
         }
       }
 
-      req.user.name = name || req.user.name;
+      req.user.name = name ?? req.user.name;
       req.user.email = email ? email.toLowerCase() : req.user.email;
-      req.user.specialization = specialization !== undefined ? specialization : req.user.specialization;
+      req.user.phone = phone ?? req.user.phone;
+      req.user.specialization = specialization ?? req.user.specialization;
+      if (twoFactorEnabled !== undefined) {
+          req.user.twoFactorEnabled = twoFactorEnabled;
+      }
+      if (notifications) {
+          req.user.notifications = {
+              email: notifications.email ?? req.user.notifications.email,
+              push: notifications.push ?? req.user.notifications.push,
+          };
+      }
+
 
       await req.user.save();
       const updatedUser = req.user.toObject();

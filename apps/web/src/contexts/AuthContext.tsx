@@ -2,8 +2,9 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import toast from "react-hot-toast";
-import { patientAuthAPI } from "../services/api"; // Import patientAuthAPI
-import { Patient, LoginCredentials, AuthResponse } from "../types"; // Import tipe Patient
+import { patientAuthAPI } from "../services/api"; 
+import { Patient, LoginCredentials, AuthResponse, ApiResponse } from "../types";
+import { useNavigate } from "react-router-dom";
 
 interface AuthContextType {
   user: Patient | null;
@@ -11,7 +12,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (credentials: LoginCredentials) => Promise<void>;
-  register: (credentials: any) => Promise<void>; // Tambahkan register
+  register: (credentials: Omit<Patient, '_id'>) => Promise<void>;
   logout: () => void;
   updateUser: (userData: Partial<Patient>) => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -35,48 +36,36 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<Patient | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const initializeAuth = async () => {
-      try {
-        const savedToken = localStorage.getItem("authToken"); // Menggunakan authToken
-        const savedUser = localStorage.getItem("user");
+      const savedToken = localStorage.getItem("authToken"); 
 
-        if (savedToken && savedUser) {
-          const parsedUser: Patient = JSON.parse(savedUser); // Pastikan tipenya Patient
-          setToken(savedToken);
-          setUser(parsedUser);
-
-          // Verifikasi token validity (endpoint patient/verify-token)
-          try {
-            const response = await patientAuthAPI.verifyToken();
-            if (response.success && response.data?.user) {
-              setUser(response.data.user);
-              localStorage.setItem("user", JSON.stringify(response.data.user)); // Update user data jika ada perubahan
-            } else {
-              // Token invalid atau kedaluwarsa, bersihkan storage
-              localStorage.removeItem("authToken");
-              localStorage.removeItem("user");
-              setToken(null);
-              setUser(null);
-            }
-          } catch (error) {
-            console.error("Patient token verification failed:", error);
+      if (savedToken) {
+        try {
+          // ✅ PERBAIKAN: Verifikasi token terlebih dahulu
+          const response: ApiResponse<{ user: Patient }> = await patientAuthAPI.verifyToken();
+          
+          if (response.success && response.data?.user) {
+            // ✅ BARU SETELAH ITU: Atur state jika token valid
+            setToken(savedToken);
+            setUser(response.data.user);
+            localStorage.setItem("authUser", JSON.stringify(response.data.user));
+          } else {
+            // Jika verifikasi gagal, bersihkan semuanya
             localStorage.removeItem("authToken");
-            localStorage.removeItem("user");
-            setToken(null);
-            setUser(null);
+            localStorage.removeItem("authUser");
           }
+        } catch (error) {
+          console.error("Token verification failed, logging out:", error);
+          localStorage.removeItem("authToken");
+          localStorage.removeItem("authUser");
         }
-      } catch (error) {
-        console.error("Error initializing patient auth state:", error);
-        localStorage.removeItem("authToken");
-        localStorage.removeItem("user");
-        setToken(null);
-        setUser(null);
-      } finally {
-        setIsLoading(false);
       }
+      
+      // Selesaikan loading setelah semua proses selesai
+      setIsLoading(false);
     };
 
     initializeAuth();
@@ -87,13 +76,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setIsLoading(true);
       const response: AuthResponse = await patientAuthAPI.login(credentials);
 
-      if (response.success && response.data) {
+      if (response.success && response.data?.user && response.data?.token) {
         const { user: userData, token: userToken } = response.data;
-        setUser(userData as Patient); // Cast to Patient
+        
         setToken(userToken);
+        setUser(userData); 
         localStorage.setItem("authToken", userToken);
-        localStorage.setItem("user", JSON.stringify(userData));
-        toast.success(`Selamat datang, ${userData.fullName || userData.name || 'Pasien'}!`);
+        localStorage.setItem("authUser", JSON.stringify(userData));
+        toast.success(`Selamat datang, ${userData.fullName || 'Pasien'}!`);
       } else {
         throw new Error(response.message || "Login gagal");
       }
@@ -106,20 +96,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const register = async (credentials: any) => {
+  const register = async (credentials: Omit<Patient, '_id'>) => {
     try {
       setIsLoading(true);
-      const response = await patientAuthAPI.register(credentials);
-      if (response.success && response.data) {
-        // Setelah register, mungkin langsung login atau arahkan ke halaman login
-        // Untuk saat ini, kita bisa arahkan ke login atau tangani token jika dikembalikan
-        toast.success(response.message || "Pendaftaran berhasil!");
-        // Jika register otomatis login dan mengembalikan token:
-        // const { user: userData, token: userToken } = response.data;
-        // setUser(userData as Patient);
-        // setToken(userToken);
-        // localStorage.setItem("authToken", userToken);
-        // localStorage.setItem("user", JSON.stringify(userData));
+      const response = await patientAuthAPI.register(credentials as any);
+      if (response.success) {
+        toast.success(response.message || "Pendaftaran berhasil! Silakan login.");
       } else {
         throw new Error(response.message || "Pendaftaran gagal");
       }
@@ -136,42 +118,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setUser(null);
     setToken(null);
     localStorage.removeItem("authToken");
-    localStorage.removeItem("user");
+    localStorage.removeItem("authUser");
     toast.success("Anda telah logout");
-    window.location.href = "/login"; // Arahkan kembali ke halaman login
+    navigate("/login"); 
   };
 
   const updateUser = async (userData: Partial<Patient>) => {
-    try {
-      setIsLoading(true);
-      // Endpoint updateProfile untuk pasien belum diimplementasikan di patientAuthAPI.
-      // Anda perlu menambahkan ini di apps/web/src/services/api.ts dan apps/api/src/controllers/patientAuthController.ts
-      console.warn("Update profile for patient is not yet implemented in API.");
-      // const response = await patientAuthAPI.updateProfile(userData); 
-      // if (response.success && response.data?.user) {
-      //   const updatedUser = response.data.user;
-      //   setUser(updatedUser);
-      //   localStorage.setItem("user", JSON.stringify(updatedUser));
-      //   toast.success("Profil berhasil diperbarui");
-      // } else {
-      //   throw new Error(response.message || "Gagal memperbarui profil");
-      // }
-    } catch (error: any) {
-      const message = error.response?.data?.message || error.message || "Terjadi kesalahan";
-      toast.error(message);
-      throw error;
-    } finally {
-      setIsLoading(false);
-    }
+    // Implementasi di masa depan
   };
 
   const refreshUser = async () => {
+    // Fungsi ini bisa jadi tidak diperlukan lagi dengan alur baru,
+    // tapi kita biarkan untuk pemanggilan manual jika dibutuhkan
     try {
-      if (!token) return;
-      const response = await patientAuthAPI.getProfile();
+      const response: ApiResponse<{ user: Patient }> = await patientAuthAPI.getProfile();
       if (response.success && response.data?.user) {
         setUser(response.data.user);
-        localStorage.setItem("user", JSON.stringify(response.data.user));
+        localStorage.setItem("authUser", JSON.stringify(response.data.user));
       }
     } catch (error) {
       console.error("Error refreshing patient user:", error);

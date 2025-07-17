@@ -7,13 +7,12 @@ import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { Plus, Search, Filter, Eye, Edit, Trash2, Users, UserPlus, Activity, Loader2 } from "lucide-react"
 import toast from "react-hot-toast"
-
 import MetricCard from "../components/Dashboard/MetricCard"
 import DataTable from "../components/DataTable/DataTable"
 import PatientModal from "../components/Modals/PatientModal"
 import type { PatientFormData } from "../components/Modals/PatientModal"
-import { patientAPI, type PatientData, type PatientsApiResponse, type PatientStatsApiResponse } from "../services/api" 
-
+import { patientAPI } from "../services/api" 
+import type { PatientData, PatientsApiResponse, PatientStatsApiResponse } from "../types"
 // Sesuaikan interface Patient dengan PatientData dari api.ts
 interface Patient extends PatientData {
   // Hanya tambahkan properti khusus frontend jika ada

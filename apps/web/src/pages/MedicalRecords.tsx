@@ -14,15 +14,16 @@ import {
   Thermometer,
   Weight,
   Zap,
-  Loader2 // Tambahkan loader
+  Loader2 
 } from 'lucide-react';
-import Card from '../components/Card';
-import Button from '../components/Button';
+import Card from '../components/Card'; // Pastikan path ini benar
+import Button from '../components/Button'; // Pastikan path ini benar
 import MedicalRecordCard from '../components/MedicalRecordCard';
-import HealthTrendChart from '../components/charts/HealthTrendChart';
-import HealthMetricsChart from '../components/charts/HealthMetricsChart';
-import { useQuery } from '@tanstack/react-query'; // Impor useQuery
-import { medicalRecordAPI } from '../services/api'; // Impor medicalRecordAPI
+// Pastikan path ini benar jika komponen chart ada di web/components/charts
+import HealthTrendChart from '../components/charts/HealthTrendChart'; 
+import HealthMetricsChart from '../components/charts/HealthMetricsChart'; 
+import { useQuery } from '@tanstack/react-query'; 
+import { medicalRecordAPI, type ApiResponse } from '../services/api'; 
 
 // Menggunakan MedicalRecord interface dari types/index.ts
 import { MedicalRecord } from '../types';
@@ -38,21 +39,19 @@ const MedicalRecords: React.FC = () => {
   const patientId = storedUser ? JSON.parse(storedUser)._id : null;
 
   // Query untuk mendapatkan Medical Records
-  const { data: medicalRecordsResponse, isLoading: isLoadingRecords } = useQuery({
+  const { data: medicalRecordsResponse, isLoading: isLoadingRecords } = useQuery<ApiResponse<MedicalRecord[]>>({
     queryKey: ['medicalRecords', patientId, searchTerm, sortBy],
     queryFn: () => {
-      if (!patientId) return Promise.resolve({ success: true, data: [] }); // Jika tidak ada patientId, kembalikan kosong
+      if (!patientId) return Promise.resolve({ success: true, data: [] }); 
       return medicalRecordAPI.getPatientMedicalRecords(patientId, searchTerm, sortBy);
     },
-    enabled: !!patientId, // Hanya jalankan query jika patientId ada
+    enabled: !!patientId, 
     staleTime: 5 * 60 * 1000, 
   });
 
   const medicalRecords: MedicalRecord[] = medicalRecordsResponse?.data || [];
-  // Perlu diperhatikan: Saat ini medicalRecordAPI.getPatientMedicalRecords masih mock/placeholder.
-  // Anda perlu mengimplementasikan endpoint ini di backend.
 
-  // Sample health trend data (Ini masih mock karena data labResults tidak ada di model backend PatientUser)
+  // Sample health trend data (Ini masih mock)
   const healthTrendData = [
     { date: '2023-11', bloodPressureSystolic: 130, bloodPressureDiastolic: 85, heartRate: 75, weight: 76 },
     { date: '2023-12', bloodPressureSystolic: 120, bloodPressureDiastolic: 75, heartRate: 68, weight: 74 },
@@ -95,7 +94,7 @@ const MedicalRecords: React.FC = () => {
   const totalVisits = medicalRecords.length;
   const uniqueDoctors = new Set(medicalRecords.map(r => r.doctorName)).size;
   const totalPrescriptions = medicalRecords.reduce((acc, record) => acc + record.prescriptions.length, 0);
-  const recentVisit = medicalRecords.sort((a, b) => new Date(b.visitDate).getTime() - new Date(a.visitDate).getTime())[0];
+  const recentVisit = medicalRecords.sort((a, b) => new Date(b.visitDate).getTime() - new Date(b.visitDate).getTime())[0];
 
   if (isLoadingRecords) {
     return (

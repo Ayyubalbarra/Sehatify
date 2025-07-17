@@ -3,12 +3,10 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
 import bcrypt from 'bcryptjs';
 
-// Interface untuk metode kustom
 export interface IPatientUserMethods {
   comparePassword(candidatePassword: string): Promise<boolean>;
 }
 
-// Interface untuk dokumen PatientUser
 export interface IPatientUser extends Document, IPatientUserMethods {
   fullName: string;
   email: string;
@@ -16,9 +14,9 @@ export interface IPatientUser extends Document, IPatientUserMethods {
   phone: string;
   dateOfBirth: Date;
   address: string;
+  isActive: boolean; // ✅ Tambahkan properti ini
 }
 
-// Tipe Model dengan metode kustom
 type PatientUserModel = Model<IPatientUser, {}, IPatientUserMethods>;
 
 const PatientUserSchema: Schema<IPatientUser, PatientUserModel> = new Schema({
@@ -28,9 +26,9 @@ const PatientUserSchema: Schema<IPatientUser, PatientUserModel> = new Schema({
   phone: { type: String, required: true },
   dateOfBirth: { type: Date, required: true },
   address: { type: String, required: true },
+  isActive: { type: Boolean, default: true }, // ✅ Tambahkan field ini ke skema
 }, { timestamps: true });
 
-// Middleware untuk hashing password sebelum menyimpan
 PatientUserSchema.pre<IPatientUser>('save', async function (next) {
   if (!this.isModified('password') || !this.password) {
     return next();
@@ -40,7 +38,6 @@ PatientUserSchema.pre<IPatientUser>('save', async function (next) {
   next();
 });
 
-// Metode untuk membandingkan password
 PatientUserSchema.methods.comparePassword = async function (candidatePassword: string): Promise<boolean> {
   if (!this.password) return false; 
   return await bcrypt.compare(candidatePassword, this.password);

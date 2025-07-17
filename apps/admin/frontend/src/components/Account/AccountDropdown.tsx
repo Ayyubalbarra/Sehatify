@@ -1,3 +1,5 @@
+// apps/admin/frontend/src/components/Account/AccountDropdown.tsx
+
 "use client"
 
 import type React from "react"
@@ -26,7 +28,6 @@ const AccountDropdown: React.FC<AccountDropdownProps> = ({ onClose }) => {
     navigate("/")
   }
 
-  // Definisikan style untuk item menu agar tidak berulang
   const menuItemClass = "flex w-full items-center gap-3 px-5 py-2.5 text-sm text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
   
   return (
@@ -34,14 +35,14 @@ const AccountDropdown: React.FC<AccountDropdownProps> = ({ onClose }) => {
       {/* Header Dropdown */}
       <div className="border-b border-slate-200 p-5 text-center">
         <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-blue-600 text-xl font-semibold text-white">
-          {user?.avatar ? (
+          {user?.avatar ? ( 
             <img 
               src={user.avatar} 
-              alt={user.name} 
+              alt={user.name || "User Avatar"} 
               className="h-full w-full rounded-full object-cover"
             />
           ) : (
-            <span>{user?.name?.charAt(0)?.toUpperCase() || "A"}</span>
+            <span>{(user?.name?.charAt(0) || "A").toUpperCase()}</span>
           )}
         </div>
         <div className="text-center">
@@ -59,17 +60,14 @@ const AccountDropdown: React.FC<AccountDropdownProps> = ({ onClose }) => {
           <User size={16} />
           <span>Profil Saya</span>
         </button>
-
         <button className={menuItemClass} onClick={() => handleMenuClick("/settings")}>
           <Settings size={16} />
           <span>Pengaturan</span>
         </button>
-
         <button className={menuItemClass} onClick={() => handleMenuClick()}>
           <Shield size={16} />
           <span>Keamanan</span>
         </button>
-
         <button className={menuItemClass} onClick={() => handleMenuClick()}>
           <HelpCircle size={16} />
           <span>Bantuan</span>

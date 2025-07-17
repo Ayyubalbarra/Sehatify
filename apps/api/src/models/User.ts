@@ -3,41 +3,45 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
 import bcrypt from 'bcryptjs';
 
-// Definisikan metode kustom yang ada di skema Anda
 export interface IUserMethods {
   comparePassword(candidatePassword: string): Promise<boolean>;
   updateLastLogin(): Promise<void>;
 }
 
-// Gabungkan tipe dasar dokumen dengan metode kustom
 export interface IUser extends Document, IUserMethods {
   name: string;
   email: string;
-  password?: string; // Tanda '?' karena tidak selalu di-select dari DB
+  password?: string; 
   role: 'admin' | 'doctor' | 'staff' | 'Super Admin';
+  phone?: string;
   specialization?: string;
   isActive: boolean;
   lastLogin?: Date;
+  twoFactorEnabled: boolean;
+  notifications: {
+    email: boolean;
+    push: boolean;
+  };
 }
 
-// Beri tahu Mongoose tentang model yang memiliki metode kustom
 type UserModel = Model<IUser, {}, IUserMethods>;
 
 const UserSchema: Schema<IUser, UserModel> = new Schema({
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true, lowercase: true },
   password: { type: String, required: true, select: false },
-  role: {
-    type: String,
-    enum: ['admin', 'doctor', 'staff', 'Super Admin'],
-    default: 'staff',
-  },
+  role: { type: String, enum: ['admin', 'doctor', 'staff', 'Super Admin'], default: 'staff' },
+  phone: { type: String },
   specialization: { type: String },
   isActive: { type: Boolean, default: true },
   lastLogin: { type: Date },
+  twoFactorEnabled: { type: Boolean, default: false },
+  notifications: {
+    email: { type: Boolean, default: true },
+    push: { type: Boolean, default: true },
+  },
 }, { timestamps: true });
 
-// Middleware untuk hashing password
 UserSchema.pre<IUser>('save', async function (next) {
   if (!this.isModified('password') || !this.password) {
     return next();
@@ -47,7 +51,6 @@ UserSchema.pre<IUser>('save', async function (next) {
   next();
 });
 
-// Implementasi metode kustom
 UserSchema.methods.comparePassword = async function (candidatePassword: string): Promise<boolean> {
   if (!this.password) return false;
   return await bcrypt.compare(candidatePassword, this.password);

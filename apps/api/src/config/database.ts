@@ -1,59 +1,49 @@
-import mongoose, { type Mongoose } from 'mongoose';
+// apps/api/src/config/database.ts
 
-class DatabaseConnection {
-  private connection: Mongoose | null = null;
+import mongoose, { ConnectOptions } from 'mongoose';
 
-  async connect(): Promise<void> {
-    // Jika koneksi sudah ada, tidak perlu melakukan apa-apa
-    if (this.connection) {
-      return;
-    }
+const MONGODB_URI = process.env.MONGODB_URI;
 
-    // [FIX] Ambil dan periksa MONGODB_URI di dalam metode ini
-    const MONGODB_URI = process.env.MONGODB_URI;
+if (!MONGODB_URI) {
+  throw new Error("❌ Fatal: MONGODB_URI tidak terdefinisi di file .env");
+}
 
-    if (!MONGODB_URI) {
-      console.error("❌ Variabel MONGODB_URI tidak ditemukan di file .env");
-      // Hentikan aplikasi dengan error yang jelas
-      throw new Error('Pastikan MONGODB_URI sudah diatur di file .env');
-    }
+// ✅ PERBAIKAN: Menambahkan opsi koneksi yang lebih tangguh
+const options: ConnectOptions = {
+  // Opsi ini membantu Mongoose menemukan server yang aktif lebih cepat
+  serverSelectionTimeoutMS: 5000, 
+  // Opsi ini membantu mencegah timeout pada query yang berjalan lama
+  socketTimeoutMS: 45000, 
+};
 
+const dbConnection = {
+  connect: async (): Promise<void> => {
     try {
-      const options = {
-        maxPoolSize: 10,
-        serverSelectionTimeoutMS: 5000,
-        socketTimeoutMS: 45000,
-      };
-
-      // Sekarang TypeScript tahu MONGODB_URI adalah string yang valid di sini
-      this.connection = await mongoose.connect(MONGODB_URI, options);
-
-      console.log('✅ MongoDB Connected Successfully');
-      console.log(`📊 Database: ${mongoose.connection.name}`);
-      console.log(`🌐 Host: ${mongoose.connection.host}`);
-
-      mongoose.connection.on("error", (err) => {
-        console.error("❌ MongoDB Connection Error:", err);
+      await mongoose.connect(MONGODB_URI, options);
+      
+      const db = mongoose.connection;
+      
+      db.on('error', (error) => {
+        console.error('❌ MongoDB connection error:', error);
       });
 
-      mongoose.connection.on("disconnected", () => {
-        console.warn("⚠️ MongoDB Disconnected");
+      db.once('open', () => {
+        const dbInfo = db.getClient().db(db.name);
+        console.log('✅ MongoDB Connected Successfully');
+        console.log(`📊 Database: ${dbInfo.databaseName}`);
+        console.log(`🌐 Host: ${db.host}`);
       });
 
     } catch (error) {
-      console.error("❌ MongoDB Connection Failed:", error);
-      process.exit(1);
+      console.error('❌ Could not connect to MongoDB:', error);
+      process.exit(1); // Hentikan aplikasi jika koneksi awal gagal
     }
-  }
+  },
 
-  async disconnect(): Promise<void> {
-    if (this.connection) {
-      await mongoose.disconnect();
-      this.connection = null;
-    }
-  }
-}
-
-const dbConnection = new DatabaseConnection();
+  disconnect: async (): Promise<void> => {
+    await mongoose.disconnect();
+    console.log('🔌 MongoDB Disconnected');
+  },
+};
 
 export default dbConnection;

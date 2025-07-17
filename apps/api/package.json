@@ -3,11 +3,12 @@
   "version": "1.0.0",
   "description": "Backend API service for the Sehatify Healthcare System",
   "main": "dist/server.js",
-  "scripts": {
+ "scripts": {
     "start": "node dist/server.js",
     "build": "tsc",
-    "dev": "tsx watch src/server.ts",
-    "seed": "tsx src/scripts/seedDatabase.ts"
+    "dev": "tsx watch --require dotenv/config src/server.ts",
+    "seed": "tsx --require dotenv/config src/scripts/seedDatabase.ts",
+    "seed:booking": "tsx --require dotenv/config src/scripts/seedBooking.ts"
   },
   "keywords": [
     "healthcare",

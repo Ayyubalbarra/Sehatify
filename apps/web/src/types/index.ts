@@ -1,147 +1,123 @@
 // apps/web/src/types/index.ts
 
-// Tipe Patient yang lebih sesuai dengan patientUser.model.ts (backend)
+// =========================================================
+// TIPE AUTENTIKASI & PENGGUNA
+// =========================================================
+
+// Tipe data untuk pasien yang sedang login
 export interface Patient {
-  _id: string; // ID dari MongoDB
-  fullName: string; // Sesuai dengan backend patientUser.model
+  _id: string;
+  fullName: string;
   email: string;
-  phone: string;
-  dateOfBirth: string; // Asumsi string ISO date "YYYY-MM-DD"
-  address: string; // Untuk PatientUser, address adalah string
+  // Anda bisa menambahkan properti lain di sini jika diperlukan,
+  // misalnya 'phoneNumber', 'dateOfBirth', dll.
 }
 
-// Tipe Doctor yang lebih sesuai dengan User model (role doctor)
-export interface Doctor {
-  _id: string; // ID dari MongoDB
-  name: string;
-  specialization: string; 
-  licenseNumber: string; 
-  email?: string;
-  phone?: string;
-  photo?: string; // Jika Anda menyimpan URL foto di User model atau mendapatkan dari tempat lain
-  rating?: number; 
-  experience?: number; 
+// Tipe untuk respons API saat login/register
+export interface AuthResponse {
+  success: boolean;
+  message?: string; 
+  data?: {
+    user: Patient;
+    token: string;
+  };
 }
 
-// Tipe Hospital (masih sesuai mock di frontend, karena belum ada model di backend)
+// Tipe untuk kredensial yang dikirim saat login
+export interface LoginCredentials {
+  email: string;
+  password: string;
+}
+
+// =========================================================
+// TIPE UNTUK ALUR BOOKING
+// =========================================================
+
+// Tipe data untuk daftar rumah sakit
 export interface Hospital {
-  id: string;
+  _id: string;
   name: string;
   address: string;
-  phone: string;
-  rating?: number; 
-  accreditation?: string[]; 
-  image?: string; 
-  specialties: string[]; // Ini akan menjadi Polyclinic name/department dari backend
-  keyServices?: string[]; 
-  bedCount?: number; 
-  establishedYear?: number; 
-  description?: string; 
+  polyclinics?: Polyclinic[]; // Berisi daftar poli yang tersedia di RS tsb, opsional karena mungkin tidak selalu di-populate
 }
 
-// Tipe Polyclinic (BARU, sesuai dengan backend IPolyclinic)
+// Tipe data untuk daftar poliklinik
 export interface Polyclinic {
   _id: string;
-  polyclinicId: string;
-  name: string; // Nama poliklinik, ex: "Poli Jantung"
-  department: string; // Departemen utama, ex: "Spesialis"
-  description?: string;
-  status?: 'Active' | 'Maintenance' | 'Closed';
+  name: string;
+  department: string;
+  // Anda bisa menambahkan properti lain seperti 'description' atau 'doctors'
 }
 
-// Tipe Schedule (BARU, sesuai dengan backend ISchedule)
+// Tipe data untuk daftar dokter
+export interface Doctor {
+  _id: string;
+  name: string;
+  specialization: string;
+  polyclinic?: string; // ID poliklinik
+  // Anda bisa menambahkan properti lain seperti 'contact' atau 'experience'
+}
+
+// Tipe data untuk jadwal/slot waktu yang tersedia
 export interface Schedule {
   _id: string;
-  scheduleId: string;
-  doctorId: string; 
-  polyclinicId: string | Polyclinic; // Bisa ID atau objek Polyclinic yang terpopulate
-  date: string; // Tanggal jadwal (YYYY-MM-DD)
-  startTime: string; // Waktu mulai (HH:mm)
-  endTime: string; // Waktu selesai (HH:mm)
-  totalSlots: number;
-  bookedSlots: number;
-  availableSlots: number;
-  status: 'Active' | 'Cancelled' | 'Completed';
-  estimatedWaitTime?: number;
+  doctorId: string; // ID dokter yang terkait dengan jadwal ini
+  date: string;     // Tanggal jadwal (e.g., "YYYY-MM-DD")
+  startTime: string; // Waktu mulai (e.g., "09:00")
+  endTime: string;   // Waktu selesai (e.g., "17:00")
+  availableSlots: number; // Jumlah slot yang tersedia untuk jadwal ini
+  // Anda bisa menambahkan properti lain seperti 'duration'
 }
 
-// Tipe Appointment (sesuaikan dengan IQueue dari backend)
+// Tipe data untuk konfirmasi appointment yang berhasil dibuat
 export interface Appointment {
-  _id: string; 
-  queueId: string; 
-  patientId: string; 
-  doctorId: string; 
-  polyclinicId: string; 
-  scheduleId: string; 
-  queueNumber: number; 
-  queueDate: string; 
-  appointmentTime?: string; 
-  status: 'Waiting' | 'In Progress' | 'Completed' | 'Cancelled' | 'No Show'; 
-  priority: 'Normal' | 'Urgent' | 'Emergency'; 
-  notes?: string;
-  complaints?: string;
-  createdAt?: string;
-  updatedAt?: string;
+  _id: string;
+  patientId: string; // ID pasien yang membuat appointment
+  scheduleId: string; // ID jadwal yang di-booking
+  queueNumber: number;
+  appointmentTime: string; // Waktu janji temu yang dikonfirmasi
+  queueDate: string; // Tanggal janji temu
+  status: 'pending' | 'confirmed' | 'completed' | 'cancelled'; // Status appointment
+
+  // Data terpopulasi (jika backend mengirimkannya)
+  doctor?: Doctor; 
+  polyclinic?: Polyclinic;
+  hospital?: Hospital; // Hospital terkait jika diperlukan
 }
 
-export interface Article {
-  id: string;
-  title: string;
-  summary: string;
-  content: string;
-  image: string;
-  category: string;
-  publishDate: string;
-  author: string;
-}
+// =========================================================
+// TIPE REKAM MEDIS
+// =========================================================
 
-// Tipe MedicalRecord (perlu diperluas agar cocok dengan data dari backend)
+// Tipe data untuk Rekam Medis Pasien
 export interface MedicalRecord {
-  id: string;
-  patientId: string;
-  visitDate: string;
-  doctorName: string;
+  _id: string;
+  patientId: string; // ID pasien yang memiliki rekam medis ini
+  doctorId: string; // ID dokter yang menangani
+  visitId: string;  // ID kunjungan terkait jika ada
   diagnosis: string;
-  treatments: string[];
-  prescriptions: string[];
-  labResults?: { // Menjadikan properti opsional
-    bloodPressure?: string;
-    heartRate?: string;
-    temperature?: string;
-    weight?: string;
-  };
-  notes?: string; // Menjadikan properti opsional
+  medications: string[]; // Daftar obat-obatan
+  date: string;       // Tanggal rekam medis dibuat/dicatat
+  notes?: string;     // Catatan tambahan
+
+  // Anda mungkin ingin men populate data dokter dan pasien
+  doctorInfo?: Doctor;
+  patientInfo?: Patient;
 }
 
-export interface ChatMessage {
-  id: string;
-  message: string;
-  sender: 'user' | 'bot';
-  timestamp: Date;
-}
 
+// =========================================================
+// TIPE WRAPPER API UMUM
+// =========================================================
+
+// Tipe respons standar dari semua API kita
 export interface ApiResponse<T> {
   success: boolean;
-  data?: T;
+  data: T;
   message?: string;
-  errors?: any[]; 
   pagination?: {
     totalPages: number;
     currentPage: number;
     total: number;
   };
-}
-
-export interface AuthResponse {
-  success: boolean;
-  message?: string;
-  data?: {
-    user: Patient; // Untuk frontend web, user adalah Patient
-    token: string;
-  };
-}
-
-export interface LoginCredentials {
-  email: string;
-  password: string;
 }

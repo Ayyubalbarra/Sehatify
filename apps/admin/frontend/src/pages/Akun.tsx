@@ -1,26 +1,25 @@
+// apps/admin/frontend/src/pages/Akun.tsx
+
 "use client"
 
 import type React from "react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Save, Upload, Eye, EyeOff, Shield, Activity, Clock, User as UserIcon } from "lucide-react"
-import { useMutation } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import toast from "react-hot-toast"
 import { useAuth } from "../contexts/AuthContext"
-// Hapus import CSS
-// import "./Akun.css"
+import { authAPI } from "../services/api" // <-- Import authAPI
 
-// Komponen pembungkus untuk setiap seksi
+// Komponen Card dan Input tidak berubah
 const SectionCard: React.FC<{ title: string; icon: React.ElementType; children: React.ReactNode }> = ({ title, icon: Icon, children }) => (
-  <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-    <div className="flex items-center gap-3 border-b border-slate-100 bg-slate-50/50 p-4">
-      <Icon className="text-slate-600" size={20} />
-      <h2 className="text-lg font-semibold text-slate-800">{title}</h2>
+    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="flex items-center gap-3 border-b border-slate-100 bg-slate-50/50 p-4">
+        <Icon className="text-slate-600" size={20} />
+        <h2 className="text-lg font-semibold text-slate-800">{title}</h2>
+      </div>
+      <div className="p-6">{children}</div>
     </div>
-    <div className="p-6">{children}</div>
-  </div>
 );
-
-// Komponen untuk input form
 const FormInput: React.FC<React.InputHTMLAttributes<HTMLInputElement> & { label: string }> = ({ label, ...props }) => (
     <div className="w-full">
         <label className="block text-sm font-medium text-slate-700 mb-1">{label}</label>
@@ -31,49 +30,87 @@ const FormInput: React.FC<React.InputHTMLAttributes<HTMLInputElement> & { label:
     </div>
 );
 
+
 const Akun: React.FC = () => {
   const { user, updateUser } = useAuth()
+  const queryClient = useQueryClient()
+
+  // ✅ State lokal
   const [showPassword, setShowPassword] = useState(false)
   const [showNewPassword, setShowNewPassword] = useState(false)
-
-  const [profileData, setProfileData] = useState({
-    name: user?.name || "",
-    email: user?.email || "",
-    phone: "08123456789",
-    position: "Administrator",
-    department: "IT",
-    employeeId: "EMP001",
-    joinDate: "2023-01-01",
-    bio: "Sistem Administrator untuk Rumah Sakit Sehatify.",
-  })
-
+  const [profileData, setProfileData] = useState({ name: "", email: "", phone: "", role: "" })
   const [passwordData, setPasswordData] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" })
-  const [securityData, setSecurityData] = useState({ twoFactorEnabled: false, emailNotifications: true, loginAlerts: true })
 
+  // ✅ Mengambil data profil terbaru dari API
+  const { data: profileApiResponse, isLoading: isProfileLoading } = useQuery({
+    queryKey: ['userProfile'],
+    queryFn: authAPI.getProfile,
+  });
+
+  // ✅ Mengisi form dengan data dari API setelah berhasil diambil
+  useEffect(() => {
+    if (profileApiResponse?.data?.user) {
+      const apiUser = profileApiResponse.data.user;
+      setProfileData({
+        name: apiUser.name || "",
+        email: apiUser.email || "",
+        phone: apiUser.phone || "",
+        role: apiUser.role || "staff",
+      })
+    }
+  }, [profileApiResponse]);
+
+
+  // ✅ Menghubungkan mutation ke API backend
   const updateProfileMutation = useMutation({
-    mutationFn: async (data: any) => { await new Promise(resolve => setTimeout(resolve, 1000)); return { success: true } },
-    onSuccess: () => { updateUser({ name: profileData.name, email: profileData.email }); toast.success("Profil berhasil diperbarui") },
-    onError: () => { toast.error("Gagal memperbarui profil") },
-  })
+    mutationFn: authAPI.updateProfile,
+    onSuccess: (response) => {
+      toast.success("Profil berhasil diperbarui");
+      // Perbarui data di cache react-query dan context
+      queryClient.setQueryData(['userProfile'], response);
+      if (response.data?.user) {
+        updateUser(response.data.user);
+      }
+    },
+    onError: () => {
+      toast.error("Gagal memperbarui profil");
+    },
+  });
 
   const changePasswordMutation = useMutation({
-    mutationFn: async (data: any) => { await new Promise(resolve => setTimeout(resolve, 1000)); if (data.currentPassword !== "admin123") throw new Error("Password lama tidak benar"); return { success: true } },
-    onSuccess: () => { setPasswordData({ currentPassword: "", newPassword: "", confirmPassword: "" }); toast.success("Password berhasil diubah") },
-    onError: (error: any) => { toast.error(error.message || "Gagal mengubah password") },
-  })
+    mutationFn: authAPI.changePassword,
+    onSuccess: () => {
+      setPasswordData({ currentPassword: "", newPassword: "", confirmPassword: "" });
+      toast.success("Password berhasil diubah");
+    },
+    onError: (error: any) => {
+      // Pesan error dari backend akan otomatis ditampilkan oleh interceptor axios
+    },
+  });
 
+  // ✅ Handler submit yang sudah terhubung
   const handleProfileSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    updateProfileMutation.mutate(profileData)
-  }
+    e.preventDefault();
+    updateProfileMutation.mutate({ name: profileData.name, email: profileData.email, phone: profileData.phone });
+  };
 
   const handlePasswordSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (passwordData.newPassword !== passwordData.confirmPassword) { toast.error("Password baru dan konfirmasi tidak sama"); return }
-    if (passwordData.newPassword.length < 6) { toast.error("Password baru minimal 6 karakter"); return }
-    changePasswordMutation.mutate(passwordData)
-  }
+    e.preventDefault();
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      toast.error("Password baru dan konfirmasi tidak sama");
+      return;
+    }
+    if (passwordData.newPassword.length < 6) {
+      toast.error("Password baru minimal 6 karakter");
+      return;
+    }
+    changePasswordMutation.mutate({
+      currentPassword: passwordData.currentPassword,
+      newPassword: passwordData.newPassword,
+    });
+  };
 
+  // ... (fungsi avatar upload dan data aktivitas statis tidak berubah)
   const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
@@ -92,6 +129,11 @@ const Akun: React.FC = () => {
     { id: 3, action: "Export laporan bulanan", timestamp: "2024-07-05 11:00:00", ip: "192.168.1.100", device: "Chrome on Windows" },
   ]
 
+
+  if (isProfileLoading) {
+    return <div>Memuat data profil...</div>
+  }
+
   return (
     <div className="mx-auto max-w-4xl space-y-8">
       <div>
@@ -100,6 +142,7 @@ const Akun: React.FC = () => {
       </div>
 
       <SectionCard title="Informasi Profil" icon={UserIcon}>
+        {/* ... (bagian avatar tidak berubah) */}
         <div className="mb-6 flex flex-col items-center gap-4">
           <div className="relative h-24 w-24">
             <div className="flex h-full w-full items-center justify-center rounded-full bg-blue-600 text-4xl font-semibold text-white">
@@ -117,7 +160,8 @@ const Akun: React.FC = () => {
             <FormInput label="Nama Lengkap" type="text" value={profileData.name} onChange={(e) => setProfileData(prev => ({ ...prev, name: e.target.value }))} required />
             <FormInput label="Email" type="email" value={profileData.email} onChange={(e) => setProfileData(prev => ({ ...prev, email: e.target.value }))} required />
             <FormInput label="Nomor Telepon" type="tel" value={profileData.phone} onChange={(e) => setProfileData(prev => ({ ...prev, phone: e.target.value }))} />
-            <FormInput label="Posisi" type="text" value={profileData.position} onChange={(e) => setProfileData(prev => ({ ...prev, position: e.target.value }))} />
+            {/* ✅ Menggunakan 'role' dari database dan membuatnya tidak bisa diubah */}
+            <FormInput label="Posisi" type="text" value={profileData.role} disabled />
           </div>
           <div className="flex justify-end">
             <button type="submit" className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 disabled:opacity-50" disabled={updateProfileMutation.isPending}>
@@ -129,7 +173,8 @@ const Akun: React.FC = () => {
       </SectionCard>
 
       <SectionCard title="Ubah Password" icon={Shield}>
-        <form onSubmit={handlePasswordSubmit} className="space-y-4">
+         {/* ... (form ubah password tidak berubah, karena sudah terhubung ke mutation) */}
+         <form onSubmit={handlePasswordSubmit} className="space-y-4">
           <div className="relative">
             <FormInput label="Password Lama" type={showPassword ? "text" : "password"} value={passwordData.currentPassword} onChange={(e) => setPasswordData(prev => ({ ...prev, currentPassword: e.target.value }))} required />
             <button type="button" className="absolute right-3 top-[33px] text-slate-500 hover:text-slate-800" onClick={() => setShowPassword(!showPassword)}>{showPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button>
@@ -149,6 +194,7 @@ const Akun: React.FC = () => {
       </SectionCard>
       
       <SectionCard title="Aktivitas Terbaru" icon={Activity}>
+        {/* ... (bagian aktivitas terbaru tidak berubah) */}
         <ul className="space-y-3">
           {recentActivity.map((activity) => (
             <li key={activity.id} className="flex items-start gap-3 rounded-lg bg-slate-50 p-3">

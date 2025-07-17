@@ -3,18 +3,16 @@
 import { type Request, type Response, type NextFunction } from 'express';
 import jwt, { type JwtPayload } from 'jsonwebtoken';
 import User, { type IUser } from '../models/User';
+import PatientUser, { type IPatientUser } from '../models/patientUser.model';
 
-// Interface untuk JWT payload yang di-decode
 interface CustomJwtPayload extends JwtPayload {
   userId: string;
 }
 
-// Tipe kustom untuk Request yang sudah terotentikasi
 export interface AuthRequest extends Request {
-  user?: IUser; 
+  user?: IUser | IPatientUser; 
 }
 
-// Middleware untuk memverifikasi token
 export const authenticateToken = async (
   req: AuthRequest,
   res: Response,
@@ -25,10 +23,7 @@ export const authenticateToken = async (
     const token = authHeader?.split(' ')[1];
 
     if (!token) {
-      res.status(401).json({ 
-        success: false, 
-        message: "Akses ditolak. Token tidak disediakan." 
-      });
+      res.status(401).json({ success: false, message: "Akses ditolak. Token tidak disediakan." });
       return;
     }
 
@@ -44,8 +39,13 @@ export const authenticateToken = async (
       return;
     }
     
-    const user = await User.findById(decoded.userId).select('-password');
+    let user: IUser | IPatientUser | null = await User.findById(decoded.userId).select('-password');
     
+    if (!user) {
+      user = await PatientUser.findById(decoded.userId).select('-password');
+    }
+    
+    // Pemeriksaan isActive sekarang aman karena properti ada di kedua model
     if (!user || !user.isActive) {
       res.status(401).json({ success: false, message: "Token tidak valid atau akun tidak aktif." });
       return;
@@ -55,25 +55,19 @@ export const authenticateToken = async (
     next();
   } catch (error: unknown) {
     if (error instanceof jwt.JsonWebTokenError) {
-      res.status(401).json({ 
-        success: false, 
-        message: error.message === 'jwt expired' ? 'Token sudah kedaluwarsa.' : 'Token tidak valid.' 
-      });
+      res.status(401).json({ success: false, message: 'Token tidak valid atau kedaluwarsa.' });
       return;
     }
-    
     next(error);
   }
 };
 
-// Middleware untuk otorisasi berdasarkan peran
-export const authorizeRoles = (...roles: Array<IUser['role']>) => {
+export const authorizeRoles = (...roles: Array<string>) => {
   return (req: AuthRequest, res: Response, next: NextFunction): void => {
-    if (!req.user || !roles.includes(req.user.role)) {
-      res.status(403).json({ 
-        success: false, 
-        message: "Akses ditolak. Anda tidak memiliki izin yang cukup." 
-      });
+    // ✅ PERBAIKAN: Lakukan "type guard" untuk memeriksa keberadaan properti 'role'
+    // Ini memastikan hanya pengguna yang memiliki role (admin/staf) yang bisa lolos
+    if (!req.user || !('role' in req.user) || !roles.includes(req.user.role)) {
+      res.status(403).json({ success: false, message: "Akses ditolak. Anda tidak memiliki izin yang cukup." });
       return;
     }
     
@@ -81,7 +75,6 @@ export const authorizeRoles = (...roles: Array<IUser['role']>) => {
   };
 };
 
-// Middleware opsional untuk mendapatkan info user tanpa mewajibkan otentikasi
 export const optionalAuth = async (
   req: AuthRequest,
   res: Response,
@@ -90,18 +83,20 @@ export const optionalAuth = async (
   try {
     const authHeader = req.headers['authorization'];
     const token = authHeader?.split(' ')[1];
-
     if (token) {
-        const secret = process.env.JWT_SECRET;
-        if (secret) {
-            const decoded = jwt.verify(token, secret) as CustomJwtPayload;
-            if (typeof decoded === 'object' && decoded.userId) {
-                const user = await User.findById(decoded.userId).select('-password');
-                if (user && user.isActive) {
-                    req.user = user;
-                }
-            }
+      const secret = process.env.JWT_SECRET;
+      if (secret) {
+        const decoded = jwt.verify(token, secret) as CustomJwtPayload;
+        if (typeof decoded === 'object' && decoded.userId) {
+          let user: IUser | IPatientUser | null = await User.findById(decoded.userId).select('-password');
+          if (!user) {
+              user = await PatientUser.findById(decoded.userId).select('-password');
+          }
+          if (user && user.isActive) {
+            req.user = user;
+          }
         }
+      }
     }
     next();
   } catch (error) {

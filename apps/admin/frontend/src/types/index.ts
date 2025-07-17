@@ -1,315 +1,208 @@
+// apps/admin/frontend/src/types/index.ts
+
+// =========================================================
+// TIPE DASAR & AUTENTIKASI
+// =========================================================
+
 export interface User {
-  _id: string
-  name: string
-  email: string
-  role: "admin" | "doctor" | "nurse" | "staff" | "receptionist"
-  phone?: string
-  avatar?: string
-  department?: string
-  position?: string
-  employeeId?: string
-  isActive: boolean
-  lastLogin?: string
-  preferences?: {
-    theme: "light" | "dark" | "auto"
-    language: "id" | "en"
-    notifications: {
-      email: boolean
-      push: boolean
-      sms: boolean
-    }
-  }
-  createdAt: string
-  updatedAt: string
+  _id: string;
+  name: string; 
+  email: string;
+  role: "admin" | "doctor" | "staff" | "Super Admin"; 
+  specialization?: string;
+  isActive: boolean;
+  lastLogin?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  avatar?: string;
+  phone?: string; 
+  twoFactorEnabled: boolean;
+  notifications: {
+    email: boolean;
+    push: boolean;
+  };
 }
 
-// Auth Types
 export interface AuthResponse {
-  success: boolean
-  message: string
-  data: {
-    user: User
-    token: string
-  }
+  success: boolean;
+  message?: string; 
+  data?: {
+    user: User;
+    token: string;
+  };
 }
 
 export interface LoginCredentials {
-  email: string
-  password: string
+  email: string;
+  password: string;
 }
 
-export interface RegisterData {
-  name: string
-  email: string
-  password: string
-  role?: string
-  phone?: string
-  department?: string
-  position?: string
-  employeeId?: string
+export interface ChangePasswordData {
+  currentPassword: string;
+  newPassword: string;
 }
 
-// Patient Types
-export interface Patient {
-  _id: string
-  patientId: string
-  nik: string
-  name: string
-  dateOfBirth: string
-  gender: "Laki-laki" | "Perempuan"
-  phone: string
-  address: string
-  emergencyContact: {
-    name: string
-    relationship: string
-    phone: string
-  }
-  bloodType?: string
-  allergies?: string[]
-  medicalHistory?: string
-  isActive: boolean
-  createdAt: string
-  updatedAt: string
+export interface ApiResponse<T> {
+  success: boolean;
+  data?: T;
+  message?: string; 
+  errors?: any[];
+  pagination?: {
+    totalPages: number;
+    currentPage: number;
+    total: number;
+  };
 }
 
-// Doctor Types
-export interface Doctor {
-  _id: string
-  doctorId: string
-  employeeId: string
-  name: string
-  specialization: string
-  title: string
-  licenseNumber: string
-  phone: string
-  email: string
-  joinDate: string
-  status: "Active" | "Inactive" | "On Leave"
-  createdAt: string
-  updatedAt: string
+// =========================================================
+// TIPE UNTUK HALAMAN SETTINGS
+// =========================================================
+
+export interface Setting {
+  _id: string;
+  hospitalName: string;
+  hospitalEmail: string;
+  hospitalAddress: string;
+  timezone: string;
+  language: string;
+  sessionTimeout: number;
+  passwordExpiry: number;
 }
 
-// Polyclinic Types
-export interface Polyclinic {
-  _id: string
-  polyclinicId: string
-  name: string
-  department: string
-  description?: string
-  isActive: boolean
-  createdAt: string
-  updatedAt: string
+// =========================================================
+// TIPE UNTUK AI ASSISTANT
+// =========================================================
+
+export interface LowStockInfoCard {
+  type: 'low_stock_card';
+  items: Array<{ _id: string; name: string; currentStock: number; minimumStock: number; unit: string; }>;
 }
 
-// Queue Types
-export interface Queue {
-  _id: string
-  queueId: string
-  patientId: Patient
-  doctorId: Doctor
-  polyclinicId: Polyclinic
-  scheduleId?: string
-  queueNumber: number
-  queueDate: string
-  status: "Waiting" | "In Progress" | "Completed" | "Cancelled"
-  estimatedTime?: string
-  actualTime?: string
-  notes?: string
-  createdAt: string
-  updatedAt: string
+export type AIResponseData = { type: 'text'; content: string; } | LowStockInfoCard;
+export interface ChatMessage { id: string; role: 'user' | 'assistant'; content: string | AIResponseData; timestamp: Date; }
+export interface ChatRequest { message: string; history?: ChatMessage[]; }
+export interface ChatApiResponse { success: boolean; data: AIResponseData; }
+
+
+// =========================================================
+// TIPE DATA ENTITAS
+// =========================================================
+
+export interface DoctorDataFromAdminAPI { 
+  _id: string;
+  name: string;
+  specialization: string;
 }
 
-// Visit Types
-export interface Visit {
-  _id: string
-  visitId: string
-  patientId: Patient
-  doctorId: Doctor
-  polyclinicId: Polyclinic
-  visitDate: string
-  visitType: "Consultation" | "Emergency" | "Follow-up" | "Check-up"
-  status: "Scheduled" | "In Progress" | "Completed" | "Cancelled"
-  chiefComplaint: string
-  diagnosis: {
-    primary: string
-    secondary?: string[]
-  }
-  treatment: string
-  prescription: Array<{
-    medication: string
-    dosage: string
-    frequency: string
-    duration: string
-  }>
-  totalCost: number
-  paymentStatus: "Pending" | "Paid" | "Cancelled"
-  notes?: string
-  createdAt: string
-  updatedAt: string
+export interface DoctorListApiResponse {
+  success: boolean;
+  data: DoctorDataFromAdminAPI[];
+  pagination: { currentPage: number; totalPages: number; total: number; };
 }
 
-// Inventory Types
-export interface InventoryItem {
-  _id: string
-  itemId: string
-  name: string
-  category: string
-  unit: string
-  currentStock: number
-  minimumStock: number
-  maximumStock: number
-  unitPrice: number
-  supplier: string
-  expiryDate?: string
-  batchNumber?: string
-  location?: string
-  description?: string
-  isActive: boolean
-  createdAt: string
-  updatedAt: string
+export interface PolyclinicData {
+  _id: string;
+  name: string; 
+  department: string;
+  status: 'Active' | 'Maintenance' | 'Closed';
+  price?: number;
+  operatingHours?: {
+    [day: string]: { isOpen?: boolean; start?: string; end?: string };
+  };
+  assignedDoctors?: Array<{
+    doctorId?: string | { name?: string };
+  }>;
 }
 
-// Bed Types
-export interface Bed {
-  _id: string
-  ward: string
-  roomNumber: string
-  bedNumber: string
-  bedType: "Standard" | "VIP" | "ICU" | "Emergency"
-  status: "available" | "occupied" | "maintenance" | "reserved"
-  patientId?: string
-  dailyRate: number
-  features?: string[]
-  notes?: string
-  createdAt: string
-  updatedAt: string
+export interface PolyclinicsApiResponse {
+  success: boolean;
+  data: PolyclinicData[];
+  pagination: { currentPage: number; totalPages: number; total: number };
 }
 
-// Schedule Types
-export interface Schedule {
-  _id: string
-  scheduleId: string
-  doctorId: Doctor
-  polyclinicId: Polyclinic
-  date: string
-  startTime: string
-  endTime: string
-  totalSlots: number
-  bookedSlots: number
-  availableSlots: number
-  status: "Active" | "Cancelled" | "Completed"
-  notes?: string
-  createdAt: string
-  updatedAt: string
+export interface PatientData { 
+  _id: string; 
+  fullName: string; 
+  dateOfBirth: string;
+  gender: 'Laki-laki' | 'Perempuan';
+  phone: string;
+  email?: string; 
+  status?: 'Active' | 'Inactive'; 
+  lastVisit?: string;
 }
 
-// Dashboard Types
-export interface DashboardMetrics {
-  totalPatients: number
-  totalDoctors: number
-  emergencyToday: number
-  lowStockCount: number
-  availableBeds: number
-  queueToday: number
-  visitsToday: number
+export interface PatientsApiResponse {
+  success: boolean;
+  data: PatientData[]; 
+  pagination: { currentPage: number; totalPages: number; total: number }; 
 }
 
-export interface DashboardInsights {
-  metrics: DashboardMetrics
-  details: {
-    queueList: Queue[]
-    recentVisits: Visit[]
-    lowStockItems: InventoryItem[]
-  }
+export interface PatientStatsData {
+  total: number;
+  active: number;
+  new: number;
+  genderStats: Array<{ _id: string; count: number }>;
 }
 
-// API Response Types
-export interface ApiResponse<T = any> {
-  success: boolean
-  message: string
-  data?: T
-  errors?: string[]
+export interface PatientStatsApiResponse {
+  success: boolean;
+  data: PatientStatsData;
 }
 
-export interface PaginatedResponse<T> {
-  success: boolean
+export interface ScheduleData {
+  _id: string; 
+  doctorId: string | DoctorDataFromAdminAPI; 
+  polyclinicId: string | PolyclinicData; 
+  date: string; 
+  startTime: string; 
+  endTime: string; 
+  status: 'Active' | 'Cancelled' | 'Completed';
+}
+
+export interface ScheduleApiResponse {
+  success: boolean;
+  data: ScheduleData[];
+  pagination: { currentPage: number; totalPages: number; total: number };
+}
+
+export interface InventoryItemData { 
+  _id: string; 
+  name: string;
+  category: string;
+  currentStock: number;
+  minimumStock: number;
+  unit: string;
+  unitPrice: number;
+  status: 'Available' | 'Low Stock' | 'Out of Stock';
+}
+
+export interface InventoryApiResponse {
+  success: boolean;
+  data: InventoryItemData[]; 
+  pagination: { currentPage: number; totalPages: number; total: number };
+}
+
+export interface InventoryStatsApiResponse {
+  success: boolean;
   data: {
-    items: T[]
-    pagination: {
-      current: number
-      pages: number
-      total: number
-    }
-  }
+    total: number; 
+    lowStock: number;
+    outOfStock: number;
+    totalValue: number;
+  };
 }
 
-// Notification Types
-export interface Notification {
-  id: string
-  type: "info" | "success" | "warning" | "error"
-  title: string
-  message: string
-  timestamp: string
-  read: boolean
-  action?: {
-    label: string
-    url: string
-  }
-}
+export interface ChartDataForRecharts { name: string; value: number; [key: string]: any; }
+export interface FinancialSummaryData { totalRevenue: number; operationalCost: number; profitMargin: number; patientSatisfaction: number; }
+export interface ServiceDistributionData { name: string; value: number; color?: string; }
 
-// Form Types
-export interface FormField {
-  name: string
-  label: string
-  type: "text" | "email" | "password" | "number" | "select" | "textarea" | "date" | "tel"
-  required?: boolean
-  placeholder?: string
-  options?: Array<{ value: string; label: string }>
-  validation?: {
-    min?: number
-    max?: number
-    pattern?: string
-    message?: string
-  }
-}
-
-// Chart Types
-export interface ChartData {
-  labels: string[]
-  datasets: Array<{
-    label: string
-    data: number[]
-    backgroundColor?: string | string[]
-    borderColor?: string | string[]
-    borderWidth?: number
-    fill?: boolean
-  }>
-}
-
-// Filter Types
-export interface FilterOptions {
-  search?: string
-  status?: string
-  category?: string
-  dateFrom?: string
-  dateTo?: string
-  page?: number
-  limit?: number
-  sortBy?: string
-  sortOrder?: "asc" | "desc"
-}
-
-// Socket Types
-export interface SocketEvent {
-  type: string
-  data: any
-  timestamp: string
-}
-
-// Error Types
-export interface ApiError {
-  success: false
-  message: string
-  errors?: string[]
-  statusCode?: number
+export interface DashboardOverviewApiData {
+  totalPatients?: number;
+  erAdmissions?: number;
+  bloodUnitsOminus?: number;
+  availableBeds?: number;
+  patientTrendData?: ChartDataForRecharts[];
+  totalVisits?: number; 
+  averageDaily?: number; 
+  occupancyRate?: number; 
 }

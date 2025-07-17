@@ -1,19 +1,33 @@
+// apps/api/src/interfaces/ISchedule.ts
+
 import { Document, Types } from 'mongoose';
+import { IUser } from '../models/User'; 
+import { IPolyclinic } from './IPolyclinic';
 
 export interface ISchedule extends Document {
-    _id: string;
+    _id: Types.ObjectId;
     scheduleId: string;
-    doctorId: Types.ObjectId;
-    polyclinicId: Types.ObjectId;
+    // doctorId dan polyclinicId bisa berupa ObjectId atau objek populated
+    doctorId: Types.ObjectId | IUser; 
+    polyclinicId: Types.ObjectId | IPolyclinic; 
     date: Date;
     startTime: string;
     endTime: string;
     totalSlots: number;
     bookedSlots: number;
     availableSlots: number;
-    status: 'Active' | 'Cancelled' | 'Full';
-    createdBy: Types.ObjectId;
+    status: 'Active' | 'Cancelled' | 'Completed'; 
+    appointments?: {
+        appointmentId?: string;
+        patientId?: Types.ObjectId; // Atau IPatientUser populated
+        appointmentTime?: string;
+        status?: 'Scheduled' | 'Completed' | 'Cancelled' | 'No Show';
+        queueNumber?: number;
+    }[];
+    notes?: string;
+    estimatedWaitTime?: number;
+    createdBy?: Types.ObjectId;
     updatedBy?: Types.ObjectId;
-    createdAt: Date;
-    updatedAt: Date;
+    createdAt?: Date;
+    updatedAt?: Date;
 }

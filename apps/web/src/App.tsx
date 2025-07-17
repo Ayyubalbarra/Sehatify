@@ -1,11 +1,13 @@
 // apps/web/src/App.tsx
 
 import React from 'react';
-// Pastikan hanya Routes dan Route yang diimpor dari react-router-dom
 import { Routes, Route } from 'react-router-dom'; 
 
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
+import ProtectedRoute from './components/ProtectedRoute'; // <-- 1. Impor komponen
+
+// Import semua halaman
 import Landing from './pages/Landing';
 import Register from './pages/Register';
 import Login from './pages/Login';
@@ -21,29 +23,57 @@ import Contact from './pages/Contact';
 
 function App() {
   return (
-    // PASTIKAN TIDAK ADA <Router> DI SINI.
-    // Jika ada <Router> yang membungkus <div> ini, HAPUSLAH.
     <div className="flex flex-col min-h-screen">
       <Navbar />
       <main className="flex-1">
         <Routes>
+          {/* Rute Publik */}
           <Route path="/" element={<Landing />} />
           <Route path="/register" element={<Register />} />
           <Route path="/login" element={<Login />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/book-appointment" element={<BookAppointment />} />
-          <Route path="/chatbot" element={<ChatbotAI />} />
+          <Route path="/hospitals" element={<Hospitals />} />
           <Route path="/articles" element={<ArticlesList />} />
           <Route path="/articles/:id" element={<ArticleDetail />} />
-          <Route path="/medical-records" element={<MedicalRecords />} />
-          <Route path="/hospitals" element={<Hospitals />} />
           <Route path="/about" element={<About />} />
           <Route path="/contact" element={<Contact />} />
+          
+          {/* ✅ 2. Bungkus Rute yang Dilindungi */}
+          <Route 
+            path="/dashboard" 
+            element={
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/book-appointment" 
+            element={
+              <ProtectedRoute>
+                <BookAppointment />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/medical-records" 
+            element={
+              <ProtectedRoute>
+                <MedicalRecords />
+              </ProtectedRoute>
+            } 
+          />
+           <Route 
+            path="/chatbot" 
+            element={
+              <ProtectedRoute>
+                <ChatbotAI />
+              </ProtectedRoute>
+            } 
+          />
         </Routes>
       </main>
       <Footer />
     </div>
-    // PASTIKAN TIDAK ADA </Router> DI SINI.
   );
 }
 
