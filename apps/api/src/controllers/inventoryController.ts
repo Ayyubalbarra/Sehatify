@@ -1,9 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import Inventory from "../models/Inventory";
-import * as ModelHelpers from "../utils/modelHelpers"; // Pastikan path ini benar
-import { IInventory as InventoryItem } from '../interfaces/IInventory'; // Gunakan nama alias untuk konsistensi
-
-// Definisikan interface lain yang spesifik untuk controller ini jika perlu
+// import * as ModelHelpers from "../utils/modelHelpers"; // ✅ DIHAPUS: Tidak diperlukan lagi
+import { IInventory as InventoryItem } from '../interfaces/IInventory'; 
 
 class InventoryController {
   // Get all inventory items with filters and pagination
@@ -14,8 +12,11 @@ class InventoryController {
       const query: any = {};
       if (search) query.$or = [{ name: { $regex: search, $options: "i" } }, { itemId: { $regex: search, $options: "i" } }];
       if (category) query.category = category;
-      if (status === 'Low Stock') query.$expr = { $lte: ["$currentStock", "$minimumStock"] };
-      else if (status) query.status = status;
+      // Perbaikan filter status
+      if (status === 'Low Stock') query.status = 'Low Stock';
+      else if (status === 'Out of Stock') query.status = 'Out of Stock';
+      else if (status === 'Available') query.status = 'Available';
+      else if (status && status !== 'all') query.status = status;
 
       const pageNum = parseInt(page as string);
       const limitNum = parseInt(limit as string);
@@ -26,13 +27,13 @@ class InventoryController {
           .sort({ [sortBy as string]: sortDirection })
           .limit(limitNum)
           .skip((pageNum - 1) * limitNum)
-          .lean(), // <-- Perbaikan
+          .lean(), 
         Inventory.countDocuments(query),
       ]);
       
       res.json({
         success: true,
-        data: items as InventoryItem[], // <-- Perbaikan
+        data: items as InventoryItem[], 
         pagination: { totalPages: Math.ceil(total / limitNum), currentPage: pageNum, total }
       });
     } catch (error) {
@@ -43,14 +44,14 @@ class InventoryController {
   // Get single inventory item by ID
   async getInventoryItemById(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const item = await Inventory.findById(req.params.id).lean(); // <-- Perbaikan
+      const item = await Inventory.findById(req.params.id).lean(); 
       
       if (!item) {
         res.status(404).json({ success: false, message: "Item tidak ditemukan" });
         return;
       }
 
-      res.json({ success: true, data: item as InventoryItem }); // <-- Perbaikan
+      res.json({ success: true, data: item as InventoryItem }); 
     } catch (error) {
       next(error);
     }
@@ -61,8 +62,8 @@ class InventoryController {
     try {
       const [totalItems, lowStock, outOfStock, valueResult] = await Promise.all([
         Inventory.countDocuments(),
-        Inventory.countDocuments({ $expr: { $lte: ["$currentStock", "$minimumStock"] } }),
-        Inventory.countDocuments({ currentStock: 0 }),
+        Inventory.countDocuments({ status: 'Low Stock' }), 
+        Inventory.countDocuments({ currentStock: 0 }), 
         Inventory.aggregate([
           { $group: { _id: null, totalValue: { $sum: { $multiply: ["$currentStock", "$unitPrice"] } } } }
         ]),
@@ -85,17 +86,16 @@ class InventoryController {
   // Create a new inventory item
   async createInventoryItem(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { name, category } = req.body;
       const item = new Inventory({ 
         ...req.body, 
-        itemId: ModelHelpers.generateItemId() // Menggunakan helper yang diimpor
+        // itemId: ModelHelpers.generateItemId() // ✅ itemId akan digenerate oleh hook pre('save') jika tidak ada
       });
       await item.save();
 
       res.status(201).json({
         success: true,
         message: "Item berhasil ditambahkan",
-        data: item.toObject() as InventoryItem // <-- Perbaikan
+        data: item.toObject() as InventoryItem 
       });
     } catch (error) {
       next(error);
@@ -109,7 +109,7 @@ class InventoryController {
         req.params.id,
         req.body,
         { new: true, runValidators: true }
-      ).lean(); // <-- Perbaikan
+      ).lean(); 
 
       if (!item) {
         res.status(404).json({ success: false, message: "Item tidak ditemukan" });
@@ -125,7 +125,7 @@ class InventoryController {
   // Delete an inventory item
   async deleteInventoryItem(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const item = await Inventory.findByIdAndDelete(req.params.id).lean(); // <-- Perbaikan
+      const item = await Inventory.findByIdAndDelete(req.params.id).lean(); 
       
       if (!item) {
         res.status(404).json({ success: false, message: "Item tidak ditemukan" });
@@ -174,14 +174,14 @@ class InventoryController {
   async getLowStockAlerts(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const lowStockItems = await Inventory.find({ 
-        $expr: { $lte: ["$currentStock", "$minimumStock"] } 
+        status: 'Low Stock' 
       })
       .sort({ currentStock: 1 })
-      .lean(); // <-- Perbaikan
+      .lean(); 
 
       res.json({
         success: true,
-        data: lowStockItems as InventoryItem[], // <-- Perbaikan
+        data: lowStockItems as InventoryItem[], 
         summary: {
             total: lowStockItems.length,
             critical: lowStockItems.filter(item => item.currentStock === 0).length

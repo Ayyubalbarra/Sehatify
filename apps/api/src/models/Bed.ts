@@ -1,6 +1,5 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
 
-// Definisikan tipe data untuk dokumen Bed
 export interface IBed extends Document {
   bedId: string;
   ward: 'ICU' | 'ICCU' | 'NICU' | 'General Ward' | 'VIP' | 'Emergency' | 'Isolation' | 'Maternity' | 'Pediatric';
@@ -35,11 +34,10 @@ const bedSchema = new Schema<IBed>(
       type: String,
       enum: ["available", "occupied", "maintenance", "cleaning", "reserved"],
       default: "available",
-      index: true,
     },
     currentPatient: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Patient",
+      ref: "PatientUser", // ✅ DIUBAH: ref menjadi "PatientUser"
       default: null,
     },
     occupiedAt: { type: Date },
@@ -51,7 +49,6 @@ const bedSchema = new Schema<IBed>(
   }
 );
 
-// Middleware untuk generate ID unik
 bedSchema.pre<IBed>("save", function (next) {
   if (!this.bedId) {
     this.bedId = `BED-${this.ward.replace(/\s+/g, '').toUpperCase()}-${this.roomNumber}${this.bedNumber}`;
@@ -59,7 +56,6 @@ bedSchema.pre<IBed>("save", function (next) {
   next();
 });
 
-// Index untuk pencarian yang efisien
 bedSchema.index({ ward: 1, status: 1 });
 bedSchema.index({ ward: 1, roomNumber: 1, bedNumber: 1 }, { unique: true });
 

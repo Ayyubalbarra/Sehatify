@@ -11,6 +11,9 @@ import { useAuth } from "../contexts/AuthContext"
 import { settingAPI, authAPI } from "../services/api"
 import type { Setting, User } from "../types"
 
+// --- BARU: Impor komponen form ganti password ---
+import ChangePasswordForm from "../components/Settings/ChangePasswordForm"
+
 // Komponen Helper (tidak berubah)
 const SectionCard: React.FC<{ title: string; icon: React.ElementType; children: React.ReactNode; }> = ({ title, icon: Icon, children }) => (
   <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -92,10 +95,11 @@ const Settings: React.FC = () => {
   });
 
   const handleSaveAll = () => {
+    // Tombol ini sekarang hanya menyimpan pengaturan umum dan preferensi notifikasi/2FA
     if (user?.role === 'Super Admin') {
       updateGlobalMutation.mutate(globalSettings);
     }
-    updatePersonalMutation.mutate(personalSettings);
+    updatePersonalMutation.mutate({ notifications: personalSettings.notifications, twoFactorEnabled: personalSettings.twoFactorEnabled });
   };
 
   const isSaving = updateGlobalMutation.isPending || updatePersonalMutation.isPending;
@@ -113,7 +117,7 @@ const Settings: React.FC = () => {
         </div>
         <button onClick={handleSaveAll} disabled={isSaving} className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 disabled:opacity-50 md:w-auto">
           <Save size={16} />
-          {isSaving ? "Menyimpan..." : "Simpan Perubahan"}
+          {isSaving ? "Menyimpan..." : "Simpan Preferensi"}
         </button>
       </div>
 
@@ -148,12 +152,12 @@ const Settings: React.FC = () => {
         <SectionCard title="Keamanan" icon={Shield}>
             <div className="space-y-4">
               <ToggleSwitch title="Two-Factor Authentication" checked={personalSettings.twoFactorEnabled} onChange={(e) => setPersonalSettings(p => ({...p, twoFactorEnabled: e.target.checked}))} />
-              {user?.role === 'Super Admin' && (<>
-                <hr className="my-4"/>
-                <p className="text-sm text-slate-600 flex items-center gap-2"><Info size={14}/> Pengaturan di bawah ini adalah global.</p>
-                <FormInput label="Session Timeout (menit)" type="number" min="5" value={globalSettings.sessionTimeout || 60} onChange={(e) => setGlobalSettings(p => ({...p, sessionTimeout: parseInt(e.target.value, 10)}))} />
-                <FormInput label="Password Expiry (hari)" type="number" min="30" value={globalSettings.passwordExpiry || 90} onChange={(e) => setGlobalSettings(p => ({...p, passwordExpiry: parseInt(e.target.value, 10)}))} />
-              </>)}
+              
+              {/* --- PERUBAHAN DI SINI --- */}
+              <hr className="border-slate-200" />
+              <ChangePasswordForm />
+              {/* --- AKHIR PERUBAHAN --- */}
+
             </div>
         </SectionCard>
       </div>

@@ -8,8 +8,8 @@ export interface ISetting extends Document {
   hospitalAddress: string;
   timezone: string;
   language: string;
-  sessionTimeout: number; // dalam menit
-  passwordExpiry: number; // dalam hari
+  sessionTimeout: number; 
+  passwordExpiry: number; 
 }
 
 const settingSchema: Schema<ISetting> = new Schema({

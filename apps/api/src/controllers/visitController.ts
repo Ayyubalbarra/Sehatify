@@ -1,12 +1,28 @@
 import { Request, Response, NextFunction } from 'express';
 import Visit from "../models/Visit";
-import Patient from "../models/Patient";
-import User from "../models/User"; // Dokter adalah User dengan role 'doctor'
+import PatientUser from "../models/patientUser.model"; // ✅ INI YANG BENAR!
+import User from "../models/User"; 
 import Polyclinic from "../models/Polyclinic";
 import { AuthRequest } from '../middleware/auth';
-import { IVisit } from '../interfaces/IVisit'; // Asumsikan Anda memiliki interface ini
+// import { IVisit } from '../interfaces/IVisit'; // ✅ PASTIKAN BARIS INI DIHAPUS TOTAL!
 
 class VisitController {
+  constructor() {
+    this.getAllVisits = this.getAllVisits.bind(this);
+    this.getVisitById = this.getVisitById.bind(this);
+    this.createVisit = this.createVisit.bind(this);
+    this.updateVisit = this.updateVisit.bind(this);
+    this.completeVisit = this.completeVisit.bind(this);
+    this.cancelVisit = this.cancelVisit.bind(this); 
+    this.deleteVisit = this.deleteVisit.bind(this); 
+    this.getVisitStats = this.getVisitStats.bind(this); 
+    this.getVisitsByPatient = this.getVisitsByPatient.bind(this); 
+    this.getVisitsByDoctor = this.getVisitsByDoctor.bind(this); 
+    this.getVisitsByDateRange = this.getVisitsByDateRange.bind(this); 
+    this.addMedicalRecord = this.addMedicalRecord.bind(this); 
+    this.addPrescription = this.addPrescription.bind(this); 
+  }
+
   // Get all visits with filtering and pagination
   public async getAllVisits(req: Request, res: Response, next: NextFunction) {
     try {
@@ -18,18 +34,24 @@ class VisitController {
       if (status) query.status = status;
       if (search) query['diagnosis.primary'] = { $regex: search as string, $options: "i" };
       if (startDate && endDate) {
-        query.visitDate = { $gte: new Date(startDate as string), $lte: new Date(endDate as string) };
+        const start = new Date(startDate as string);
+        start.setHours(0,0,0,0);
+        const end = new Date(endDate as string);
+        end.setHours(23,59,59,999);
+        query.visitDate = { $gte: start, $lte: end };
       }
 
       const [visits, total] = await Promise.all([
         Visit.find(query)
-          .populate("patientId", "name nik")
+          .populate("patientId", "fullName nik") 
           .populate("doctorId", "name specialization")
           .populate("polyclinicId", "name")
           .sort({ visitDate: -1 })
           .limit(Number(limit))
           .skip((Number(page) - 1) * Number(limit))
-          .lean<IVisit[]>(), // <-- Perbaikan
+          // Anda mungkin perlu menyesuaikan tipe lean di sini jika IVisit tidak lagi kompatibel
+          // Misalnya, jika IVisit masih mereferensikan IPatient lama
+          .lean<any[]>(), // Gunakan any[] sebagai fallback jika IVisit bermasalah
         Visit.countDocuments(query),
       ]);
 
@@ -43,11 +65,11 @@ class VisitController {
   public async getVisitById(req: Request, res: Response, next: NextFunction) {
     try {
       const visit = await Visit.findById(req.params.id)
-        .populate("patientId")
+        .populate("patientId", "fullName nik phone") 
         .populate("doctorId", "name specialization email")
         .populate("polyclinicId", "name")
         .populate("bedId", "bedNumber ward")
-        .lean<IVisit>(); // <-- Perbaikan
+        .lean<any>(); // Gunakan any sebagai fallback jika IVisit bermasalah
         
       if (!visit) {
         return res.status(404).json({ success: false, message: "Kunjungan tidak ditemukan" });
@@ -64,7 +86,7 @@ class VisitController {
       const { patientId, doctorId, polyclinicId } = req.body;
 
       const [patient, doctor, polyclinic] = await Promise.all([
-          Patient.findById(patientId).lean(),
+          PatientUser.findById(patientId).lean(), 
           User.findOne({ _id: doctorId, role: 'doctor' }).lean(),
           Polyclinic.findById(polyclinicId).lean()
       ]);
@@ -78,14 +100,14 @@ class VisitController {
       await visit.save();
       
       const populatedVisit = await visit.populate([
-          { path: "patientId", select: "name" }, 
+          { path: "patientId", select: "fullName" }, 
           { path: "doctorId", select: "name" }, 
           { path: "polyclinicId", select: "name" }
       ]);
       res.status(201).json({ 
           success: true, 
           message: "Kunjungan berhasil ditambahkan", 
-          data: populatedVisit.toObject() // <-- Perbaikan
+          data: populatedVisit.toObject() 
       });
     } catch (error) {
       next(error);
@@ -97,10 +119,10 @@ class VisitController {
     try {
       const updateData = { ...req.body, updatedBy: req.user?._id };
       const visit = await Visit.findByIdAndUpdate(req.params.id, updateData, { new: true, runValidators: true })
-            .populate("patientId", "name")
-            .populate("doctorId", "name")
-            .populate("polyclinicId", "name")
-            .lean<IVisit>(); // <-- Perbaikan
+          .populate("patientId", "fullName") 
+          .populate("doctorId", "name")
+          .populate("polyclinicId", "name")
+          .lean<any>(); // Gunakan any sebagai fallback jika IVisit bermasalah
 
       if (!visit) {
         return res.status(404).json({ success: false, message: "Kunjungan tidak ditemukan" });
@@ -131,15 +153,30 @@ class VisitController {
     }
   }
 
-  // Metode lainnya bisa Anda lanjutkan dengan pola yang sama...
-  public async cancelVisit(req: AuthRequest, res: Response, next: NextFunction) { /* ... */ }
-  public async deleteVisit(req: Request, res: Response, next: NextFunction) { /* ... */ }
-  public async getVisitStats(req: Request, res: Response, next: NextFunction) { /* ... */ }
-  public async getVisitsByPatient(req: Request, res: Response, next: NextFunction) { /* ... */ }
-  public async getVisitsByDoctor(req: Request, res: Response, next: NextFunction) { /* ... */ }
-  public async getVisitsByDateRange(req: Request, res: Response, next: NextFunction) { /* ... */ }
-  public async addMedicalRecord(req: AuthRequest, res: Response, next: NextFunction) { /* ... */ }
-  public async addPrescription(req: AuthRequest, res: Response, next: NextFunction) { /* ... */ }
+  public async cancelVisit(req: AuthRequest, res: Response, next: NextFunction) { 
+    res.status(501).json({ success: false, message: "Not Implemented" });
+  }
+  public async deleteVisit(req: Request, res: Response, next: NextFunction) { 
+    res.status(501).json({ success: false, message: "Not Implemented" });
+  }
+  public async getVisitStats(req: Request, res: Response, next: NextFunction) { 
+    res.status(501).json({ success: false, message: "Not Implemented" });
+  }
+  public async getVisitsByPatient(req: Request, res: Response, next: NextFunction) { 
+    res.status(501).json({ success: false, message: "Not Implemented" });
+  }
+  public async getVisitsByDoctor(req: Request, res: Response, next: NextFunction) { 
+    res.status(501).json({ success: false, message: "Not Implemented" });
+  }
+  public async getVisitsByDateRange(req: Request, res: Response, next: NextFunction) { 
+    res.status(501).json({ success: false, message: "Not Implemented" });
+  }
+  public async addMedicalRecord(req: AuthRequest, res: Response, next: NextFunction) { 
+    res.status(501).json({ success: false, message: "Not Implemented" });
+  }
+  public async addPrescription(req: AuthRequest, res: Response, next: NextFunction) { 
+    res.status(501).json({ success: false, message: "Not Implemented" });
+  }
 }
 
 export default new VisitController();

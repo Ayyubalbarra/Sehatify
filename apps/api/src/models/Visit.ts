@@ -1,6 +1,5 @@
 import mongoose, { Document, Schema, Model } from 'mongoose';
 
-// Interface untuk properti Visit
 export interface IVisit extends Document {
   visitId: string;
   patientId: Schema.Types.ObjectId;
@@ -46,12 +45,11 @@ export interface IVisit extends Document {
   };
 }
 
-// Skema Mongoose
 const visitSchema: Schema<IVisit> = new Schema(
   {
     visitId: { type: String, unique: true, index: true },
-    patientId: { type: Schema.Types.ObjectId, ref: "PatientUser", required: true, index: true }, // Changed ref to PatientUser
-    doctorId: { type: Schema.Types.ObjectId, ref: "User", required: true }, // Changed ref to User (Doctor is a User)
+    patientId: { type: Schema.Types.ObjectId, ref: "PatientUser", required: true, index: true }, // ✅ DIUBAH: ref menjadi "PatientUser"
+    doctorId: { type: Schema.Types.ObjectId, ref: "User", required: true }, 
     polyclinicId: { type: Schema.Types.ObjectId, ref: "Polyclinic", required: true },
     queueId: { type: Schema.Types.ObjectId, ref: "Queue" },
     visitDate: { type: Date, required: true, index: true },

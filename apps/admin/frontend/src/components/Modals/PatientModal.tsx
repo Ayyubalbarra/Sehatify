@@ -1,61 +1,52 @@
 // apps/admin/frontend/src/components/Modals/PatientModal.tsx
 
-"use client"
-
 import React, { useState, useEffect } from 'react';
+import { X, ArrowLeft } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { patientAPI } from '../../services/api';
-import type { PatientData } from '../../types';
-// **PERBAIKAN PENTING DI SINI**
-export interface PatientFormData {
-  _id?: string;
-  fullName: string;
-  email?: string; // <-- PERBAIKAN: Jadikan email opsional
-  phone: string;
-  dateOfBirth: string;
-  gender: 'Laki-laki' | 'Perempuan';
-
-  nik?: string;
-  address?: {
-    street?: string;
-    city?: string;
-    province?: string;
-    postalCode?: string;
-  };
-  bloodType?: 'A+' | 'A-' | 'B+' | 'B-' | 'AB+' | 'AB-' | 'O+' | 'O-';
-  allergies?: string[];
-  emergencyContact?: {
-    name?: string;
-    relationship?: string;
-    phone?: string;
-  };
-  patientId?: string;
-  status?: 'Active' | 'Inactive';
-  registrationDate?: string;
-  lastVisit?: string;
-  age?: number;
-  createdAt?: string;
-  updatedAt?: string;
-}
+import type { PatientData, PatientFormData } from '../../types';
 
 interface PatientModalProps {
-  patient?: PatientFormData;
+  mode: 'add' | 'edit' | 'view';
+  patient?: PatientData;
   onClose: () => void;
   onSave: () => void;
 }
 
-const PatientModal: React.FC<PatientModalProps> = ({ patient, onClose, onSave }) => {
-  const [formData, setFormData] = useState<PatientFormData>(patient || {
-    fullName: '',
-    email: '', // <-- Pertahankan sebagai string kosong untuk input form
-    phone: '',
-    dateOfBirth: '',
-    gender: 'Laki-laki',
-    address: {},
+const PatientModal: React.FC<PatientModalProps> = ({ mode, patient, onClose, onSave }) => {
+  const queryClient = useQueryClient();
+  const isViewMode = mode === 'view';
+
+  const [formData, setFormData] = useState<PatientFormData>({
+    fullName: "", email: "", phone: "", dateOfBirth: "", address: "",
+    gender: undefined, bloodType: undefined, allergies: [], medicalHistory: [],
+    isActive: true, 
   });
-  const [isLoading, setIsLoading] = useState(false);
-  const isEditMode = !!patient?._id;
+
+  useEffect(() => {
+    if (patient) {
+      setFormData({
+        _id: patient._id,
+        fullName: patient.fullName || "",
+        email: patient.email || "",
+        phone: patient.phone || "",
+        // Format tanggal agar sesuai dengan input type="date"
+        dateOfBirth: patient.dateOfBirth ? new Date(patient.dateOfBirth).toISOString().split('T')[0] : "",
+        address: patient.address || "",
+        gender: patient.gender || undefined,
+        bloodType: patient.bloodType || undefined,
+        allergies: patient.allergies || [],
+        medicalHistory: patient.medicalHistory || [],
+        isActive: patient.isActive !== undefined ? patient.isActive : true,
+      });
+    }
+  }, [patient]);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
 
   const createPatientMutation = useMutation({
     mutationFn: (data: PatientFormData) => patientAPI.createPatient(data),
@@ -65,7 +56,7 @@ const PatientModal: React.FC<PatientModalProps> = ({ patient, onClose, onSave })
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || "Gagal menambahkan pasien.");
-    }
+    },
   });
 
   const updatePatientMutation = useMutation({
@@ -76,92 +67,91 @@ const PatientModal: React.FC<PatientModalProps> = ({ patient, onClose, onSave })
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || "Gagal memperbarui pasien.");
-    }
+    },
   });
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    if (name.startsWith('address.')) {
-      const addressProp = name.split('.')[1];
-      setFormData(prev => ({
-        ...prev,
-        address: {
-          ...prev.address,
-          [addressProp]: value
-        }
-      }));
-    } else {
-      setFormData(prev => ({ ...prev, [name]: value }));
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
-
-    try {
-      if (isEditMode) {
-        await updatePatientMutation.mutateAsync(formData);
-      } else {
-        await createPatientMutation.mutateAsync(formData);
-      }
-    } finally {
-      setIsLoading(false);
+    if (isViewMode) return;
+    if (patient?._id) {
+      updatePatientMutation.mutate(formData);
+    } else {
+      createPatientMutation.mutate(formData);
     }
   };
+
+  const getTitle = () => {
+    if (mode === 'view') return 'Detail Data Pasien';
+    if (mode === 'edit') return 'Edit Data Pasien';
+    return 'Tambah Pasien Baru';
+  };
+  
+  const isLoading = createPatientMutation.isPending || updatePatientMutation.isPending;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6">
-        <h2 className="text-xl font-semibold mb-4">{isEditMode ? "Edit Data Pasien" : "Tambah Pasien Baru"}</h2>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="fullName" className="block text-sm font-medium text-gray-700">Nama Lengkap</label>
-            <input type="text" name="fullName" id="fullName" value={formData.fullName} onChange={handleChange} required className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"/>
-          </div>
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700">Email</label>
-            {/* Pastikan input email tidak ada 'required' jika email di formData adalah opsional */}
-            <input type="email" name="email" id="email" value={formData.email || ''} onChange={handleChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"/>
-          </div>
-          <div>
-            <label htmlFor="phone" className="block text-sm font-medium text-gray-700">Nomor Telepon</label>
-            <input type="tel" name="phone" id="phone" value={formData.phone} onChange={handleChange} required className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"/>
-          </div>
-          <div>
-            <label htmlFor="dateOfBirth" className="block text-sm font-medium text-gray-700">Tanggal Lahir</label>
-            <input type="date" name="dateOfBirth" id="dateOfBirth" value={formData.dateOfBirth} onChange={handleChange} required className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"/>
-          </div>
-          <div>
-            <label htmlFor="gender" className="block text-sm font-medium text-gray-700">Jenis Kelamin</label>
-            <select name="gender" id="gender" value={formData.gender} onChange={handleChange} required className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2">
-              <option value="Laki-laki">Laki-laki</option>
-              <option value="Perempuan">Perempuan</option>
-            </select>
-          </div>
-          <div>
-            <label htmlFor="address.street" className="block text-sm font-medium text-gray-700">Jalan</label>
-            <input type="text" name="address.street" id="address.street" value={formData.address?.street || ''} onChange={handleChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"/>
-          </div>
-          <div>
-            <label htmlFor="address.city" className="block text-sm font-medium text-gray-700">Kota</label>
-            <input type="text" name="address.city" id="address.city" value={formData.address?.city || ''} onChange={handleChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"/>
-          </div>
-          <div>
-            <label htmlFor="address.province" className="block text-sm font-medium text-gray-700">Provinsi</label>
-            <input type="text" name="address.province" id="address.province" value={formData.address?.province || ''} onChange={handleChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"/>
-          </div>
-          <div>
-            <label htmlFor="address.postalCode" className="block text-sm font-medium text-gray-700">Kode Pos</label>
-            <input type="text" name="address.postalCode" id="address.postalCode" value={formData.address?.postalCode || ''} onChange={handleChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"/>
-          </div>
-          {/* Tambahkan input lainnya sesuai PatientFormData jika ada */}
-
-          <div className="flex justify-end gap-3 mt-6">
-            <button type="button" onClick={onClose} className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">Batal</button>
-            <button type="submit" disabled={isLoading || createPatientMutation.isPending || updatePatientMutation.isPending} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50">
-              {isLoading ? 'Menyimpan...' : 'Simpan'}
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 backdrop-blur-sm">
+      <div className="relative w-full max-w-xl rounded-lg bg-white shadow-lg m-4">
+        <div className="flex items-center gap-4 p-4 border-b">
+            {/* --- TOMBOL KEMBALI --- */}
+            <button onClick={onClose} className="rounded-full p-2 transition-colors hover:bg-slate-100">
+              <ArrowLeft size={20} className="text-slate-600" />
             </button>
+            <h2 className="text-xl font-semibold text-slate-800">{getTitle()}</h2>
+        </div>
+        
+        <form onSubmit={handleSubmit}>
+          <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto pr-2">
+            <div>
+              <label htmlFor="fullName" className="mb-1 block text-sm font-medium text-slate-700">Nama Lengkap</label>
+              <input type="text" id="fullName" name="fullName" value={formData.fullName} onChange={handleInputChange} className="w-full rounded-md border border-slate-300 p-2 read-only:bg-slate-100" required readOnly={isViewMode} />
+            </div>
+            <div>
+              <label htmlFor="email" className="mb-1 block text-sm font-medium text-slate-700">Email</label>
+              <input type="email" id="email" name="email" value={formData.email} onChange={handleInputChange} className="w-full rounded-md border border-slate-300 p-2 read-only:bg-slate-100" required readOnly={isViewMode} />
+            </div>
+            <div>
+              <label htmlFor="phone" className="mb-1 block text-sm font-medium text-slate-700">Nomor Telepon</label>
+              <input type="tel" id="phone" name="phone" value={formData.phone} onChange={handleInputChange} className="w-full rounded-md border border-slate-300 p-2 read-only:bg-slate-100" required readOnly={isViewMode} />
+            </div>
+            <div>
+              <label htmlFor="dateOfBirth" className="mb-1 block text-sm font-medium text-slate-700">Tanggal Lahir</label>
+              <input type="date" id="dateOfBirth" name="dateOfBirth" value={formData.dateOfBirth} onChange={handleInputChange} className="w-full rounded-md border border-slate-300 p-2 read-only:bg-slate-100" required readOnly={isViewMode} />
+            </div>
+            <div>
+              <label htmlFor="address" className="mb-1 block text-sm font-medium text-slate-700">Alamat</label>
+              <textarea id="address" name="address" value={formData.address} onChange={handleInputChange} className="w-full rounded-md border border-slate-300 p-2 read-only:bg-slate-100" rows={3} required readOnly={isViewMode}></textarea>
+            </div>
+            <div>
+              <label htmlFor="gender" className="mb-1 block text-sm font-medium text-slate-700">Jenis Kelamin</label>
+              <select id="gender" name="gender" value={formData.gender || ''} onChange={handleInputChange} className="w-full rounded-md border border-slate-300 p-2 read-only:bg-slate-100" disabled={isViewMode}>
+                <option value="">Pilih Jenis Kelamin</option>
+                <option value="Laki-laki">Laki-laki</option>
+                <option value="Perempuan">Perempuan</option>
+              </select>
+            </div>
+            <div>
+              <label htmlFor="bloodType" className="mb-1 block text-sm font-medium text-slate-700">Golongan Darah</label>
+              <input type="text" id="bloodType" name="bloodType" value={formData.bloodType || ''} onChange={handleInputChange} className="w-full rounded-md border border-slate-300 p-2 read-only:bg-slate-100" readOnly={isViewMode} />
+            </div>
+            <div>
+              <label htmlFor="allergies" className="mb-1 block text-sm font-medium text-slate-700">Alergi (pisahkan dengan koma)</label>
+              <input type="text" id="allergies" name="allergies" value={formData.allergies?.join(', ') || ''} onChange={(e) => setFormData(p => ({...p, allergies: e.target.value.split(',').map(s => s.trim())}))} className="w-full rounded-md border border-slate-300 p-2 read-only:bg-slate-100" readOnly={isViewMode} />
+            </div>
+            <div>
+              <label htmlFor="medicalHistory" className="mb-1 block text-sm font-medium text-slate-700">Riwayat Medis (pisahkan dengan koma)</label>
+              <input type="text" id="medicalHistory" name="medicalHistory" value={formData.medicalHistory?.join(', ') || ''} onChange={(e) => setFormData(p => ({...p, medicalHistory: e.target.value.split(',').map(s => s.trim())}))} className="w-full rounded-md border border-slate-300 p-2 read-only:bg-slate-100" readOnly={isViewMode} />
+            </div>
+          </div>
+          
+          <div className="flex justify-end gap-3 p-4 border-t bg-slate-50 rounded-b-lg">
+            <button type="button" onClick={onClose} className="rounded-md border border-slate-300 px-4 py-2 text-slate-700 transition-colors hover:bg-slate-100">
+              {isViewMode ? "Tutup" : "Batal"}
+            </button>
+            {!isViewMode && (
+              <button type="submit" className="rounded-md bg-blue-600 px-4 py-2 text-white transition-colors hover:bg-blue-700 disabled:bg-blue-400" disabled={isLoading}>
+                {isLoading ? "Menyimpan..." : (patient ? "Perbarui" : "Tambah")}
+              </button>
+            )}
           </div>
         </form>
       </div>

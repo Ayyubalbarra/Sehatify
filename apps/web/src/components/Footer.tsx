@@ -1,5 +1,10 @@
+// apps/web/src/components/Footer.tsx
+
 import React from 'react';
-import { Stethoscope, Phone, Mail, MapPin, Facebook, Twitter, Instagram, Linkedin } from 'lucide-react';
+import { Phone, Mail, MapPin, Facebook, Twitter, Instagram, Linkedin } from 'lucide-react';
+
+// --- PERUBAHAN DI SINI: Impor logo SVG Anda ---
+import logoSvg from '../assets/logo.svg';
 
 const Footer: React.FC = () => {
   return (
@@ -8,12 +13,10 @@ const Footer: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           {/* Company Info */}
           <div className="space-y-4">
-            <div className="flex items-center space-x-3">
-              <div className="bg-medical-gradient rounded-lg p-2">
-                <Stethoscope className="h-6 w-6 text-white" />
-              </div>
-              <span className="text-2xl font-bold">Sehatify</span>
-            </div>
+            {/* --- PERUBAHAN DI SINI: Mengganti ikon dan teks dengan tag <img> untuk SVG --- */}
+            {/* Filter invert ditambahkan agar logo putih di background gelap */}
+            <img src={logoSvg} alt="Sehatify Logo" className="h-10 invert brightness-0" />
+            
             <p className="text-gray-300">
               Advanced healthcare solutions powered by AI technology, making quality medical care accessible to everyone.
             </p>

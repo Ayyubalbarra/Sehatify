@@ -1,26 +1,33 @@
+// apps/admin/frontend/src/components/Notifications/NotificationDropdown.tsx
+
 "use client"
 
 import type React from "react"
 import { X, AlertTriangle, Info, CheckCircle, Clock, Bell } from "lucide-react"
-import { useNotifications } from "../../contexts/NotificationContext"
+import { useNotifications } from "../../contexts/NotificationContext" // ✅ Path sudah benar
 
 interface NotificationDropdownProps {
   onClose: () => void
 }
 
 const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ onClose }) => {
-  const { notifications, markAsRead, markAllAsRead, removeNotification } = useNotifications()
+  const { notifications, unreadCount, markAsRead, markAllAsRead, removeNotification, isLoadingNotifications, errorLoadingNotifications } = useNotifications()
 
   const getIcon = (type: string) => {
     const iconProps = { size: 20, className: "flex-shrink-0" };
     switch (type) {
       case "warning":
+      case "stock_low": 
         return <div className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-100/60 text-amber-600"><AlertTriangle {...iconProps} /></div>
       case "info":
+      case "new_appointment": 
+      case "schedule_update": 
+      case "login_attempt": 
         return <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100/60 text-blue-600"><Info {...iconProps} /></div>
       case "success":
         return <div className="flex h-8 w-8 items-center justify-center rounded-full bg-green-100/60 text-green-600"><CheckCircle {...iconProps} /></div>
       case "error":
+      case "system_alert": 
         return <div className="flex h-8 w-8 items-center justify-center rounded-full bg-red-100/60 text-red-600"><AlertTriangle {...iconProps} /></div>
       default:
         return <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-600"><Clock {...iconProps} /></div>
@@ -34,11 +41,13 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ onClose }) 
   return (
     <div className="absolute right-0 top-full mt-2 w-80 origin-top-right overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg z-50 md:w-96">
       <div className="flex items-center justify-between border-b border-slate-100 p-3">
-        <h3 className="font-semibold text-slate-800">Notifikasi</h3>
+        <h3 className="font-semibold text-slate-800">Notifikasi ({unreadCount})</h3> 
         <div className="flex items-center gap-2">
-          <button onClick={markAllAsRead} className="text-xs font-medium text-blue-600 hover:underline">
-            Tandai semua dibaca
-          </button>
+          {unreadCount > 0 && ( 
+            <button onClick={markAllAsRead} className="text-xs font-medium text-blue-600 hover:underline">
+              Tandai semua dibaca
+            </button>
+          )}
           <button onClick={onClose} className="rounded-full p-1 text-slate-500 transition-colors hover:bg-slate-100">
             <X size={16} />
           </button>
@@ -46,7 +55,11 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ onClose }) 
       </div>
 
       <div className="max-h-96 overflow-y-auto">
-        {notifications.length === 0 ? (
+        {isLoadingNotifications ? (
+          <div className="flex justify-center items-center p-10 text-center text-slate-500">Memuat notifikasi...</div>
+        ) : errorLoadingNotifications ? (
+          <div className="flex justify-center items-center p-10 text-center text-red-500">Gagal memuat notifikasi. Silakan coba lagi.</div>
+        ) : notifications.length === 0 ? (
           <div className="flex flex-col items-center justify-center p-10 text-center">
             <Bell size={32} className="text-slate-400" />
             <p className="mt-2 font-medium text-slate-600">Tidak ada notifikasi baru</p>
@@ -56,24 +69,24 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ onClose }) 
           <ul className="divide-y divide-slate-100">
             {notifications.map((notification) => (
               <li
-                key={notification.id}
-                className={`relative cursor-pointer p-3 transition-colors hover:bg-slate-50 ${notification.unread ? "bg-blue-50/50" : "bg-white"}`}
-                onClick={() => handleNotificationClick(notification.id)}
+                key={notification._id} 
+                className={`relative cursor-pointer p-3 transition-colors hover:bg-slate-50 ${!notification.isRead ? "bg-blue-50/50" : "bg-white"}`} 
+                onClick={() => handleNotificationClick(notification._id)} 
               >
                 <div className="flex items-start gap-3">
                     {getIcon(notification.type)}
                     <div className="flex-1">
-                        <p className="font-semibold text-slate-800 text-sm">{notification.title}</p>
+                        <p className="font-semibold text-slate-800 text-sm">{notification.title || notification.message}</p> 
                         <p className="text-sm text-slate-600">{notification.message}</p>
                         <p className="mt-1 text-xs text-slate-400">{notification.time}</p>
                     </div>
                     <div className="flex flex-col items-end gap-2">
-                        {notification.unread && <div className="mt-1 h-2 w-2 rounded-full bg-blue-500" title="Belum dibaca"></div>}
+                        {!notification.isRead && <div className="mt-1 h-2 w-2 rounded-full bg-blue-500" title="Belum dibaca"></div>} 
                         <button
                             className="p-1 rounded-full text-slate-400 hover:bg-slate-200 hover:text-slate-600"
                             onClick={(e) => {
                                 e.stopPropagation();
-                                removeNotification(notification.id);
+                                removeNotification(notification._id);
                             }}
                             title="Hapus notifikasi"
                         >

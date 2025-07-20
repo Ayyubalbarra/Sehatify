@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Backend API service for the Sehatify Healthcare System",
   "main": "dist/server.js",
- "scripts": {
+  "scripts": {
     "start": "node dist/server.js",
     "build": "tsc",
     "dev": "tsx watch --require dotenv/config src/server.ts",
@@ -20,6 +20,7 @@
   "license": "MIT",
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
+    "@hookform/resolvers": "^5.1.1",
     "axios": "^1.10.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
@@ -28,8 +29,11 @@
     "express-list-endpoints": "^7.1.1",
     "express-validator": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
+    "moment-timezone": "^0.6.0",
     "mongoose": "^8.4.1",
-    "socket.io": "^4.7.5"
+    "react-hook-form": "^7.60.0",
+    "socket.io": "^4.7.5",
+    "zod": "^4.0.5"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

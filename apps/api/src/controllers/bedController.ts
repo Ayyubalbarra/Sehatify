@@ -2,11 +2,20 @@ import { Response, NextFunction } from 'express';
 import { validationResult } from "express-validator";
 import { Types } from 'mongoose';
 import Bed from "../models/Bed";
-import Patient from "../models/Patient";
-import { AuthRequest } from '../middleware/auth';
-import { IPatient } from '../interfaces/IPatient';
+import PatientUser, { IPatientUser } from "../models/patientUser.model"; 
+import { AuthRequest } from '../middleware/auth'; // ✅ DIUBAH: Impor AuthRequest
 
 class BedController {
+  constructor() {
+    this.getAllBeds = this.getAllBeds.bind(this);
+    this.getBedById = this.getBedById.bind(this);
+    this.createBed = this.createBed.bind(this);
+    this.updateBed = this.updateBed.bind(this);
+    this.deleteBed = this.deleteBed.bind(this);
+    this.assignPatientToBed = this.assignPatientToBed.bind(this); 
+    this.updateBedStatus = this.updateBedStatus.bind(this); 
+  }
+
   public async getAllBeds(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const { page = 1, limit = 10, status, ward, bedType } = req.query;
@@ -17,7 +26,7 @@ class BedController {
 
       const [beds, total] = await Promise.all([
         Bed.find(filter)
-          .populate("currentPatient", "name patientId")
+          .populate("currentPatient", "fullName patientId phone") 
           .sort({ ward: 1, roomNumber: 1, bedNumber: 1 })
           .limit(Number(limit))
           .skip((Number(page) - 1) * Number(limit))
@@ -37,7 +46,7 @@ class BedController {
 
   public async getBedById(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const bed = await Bed.findById(req.params.id).populate("currentPatient", "name patientId phone").lean();
+      const bed = await Bed.findById(req.params.id).populate("currentPatient", "fullName patientId phone").lean(); 
       if (!bed) {
         return res.status(404).json({ success: false, message: "Tempat tidur tidak ditemukan" });
       }
@@ -100,7 +109,7 @@ class BedController {
         return res.status(400).json({ success: false, message: "Tempat tidur tidak ditemukan atau tidak tersedia" });
       }
       
-      const patient: IPatient | null = await Patient.findById(patientId);
+      const patient: IPatientUser | null = await PatientUser.findById(patientId); 
       if (!patient) return res.status(404).json({ success: false, message: "Pasien tidak ditemukan" });
       
       bed.currentPatient = patient._id;
@@ -108,7 +117,7 @@ class BedController {
       bed.occupiedAt = new Date();
       await bed.save();
       
-      const populatedBed = await bed.populate("currentPatient", "name patientId");
+      const populatedBed = await bed.populate("currentPatient", "fullName patientId phone"); 
       res.json({ success: true, message: "Pasien berhasil ditempatkan", data: populatedBed });
     } catch (error) {
       next(error);

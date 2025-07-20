@@ -1,3 +1,5 @@
+// apps/api/src/controllers/polyclinicController.ts
+
 import { Request, Response, NextFunction } from 'express';
 import Polyclinic from "../models/Polyclinic";
 import Hospital from '../models/Hospital';
@@ -11,39 +13,42 @@ class PolyclinicController {
     this.createPolyclinic = this.createPolyclinic.bind(this);
     this.updatePolyclinic = this.updatePolyclinic.bind(this);
     this.deletePolyclinic = this.deletePolyclinic.bind(this);
-    this.getDepartments = this.getDepartments.bind(this); // ✅ Tambahkan bind untuk fungsi baru
+    this.getDepartments = this.getDepartments.bind(this);
   }
 
   public async getAllPolyclinics(req: Request, res: Response, next: NextFunction) {
     try {
-      const { hospitalId, search, department } = req.query;
+      const { hospitalId, search, department, status, page = 1, limit = 10 } = req.query;
 
+      // --- PERBAIKAN DI SINI: Logika untuk Web Pasien disederhanakan ---
       if (hospitalId) {
-        const hospital = await Hospital.findById(hospitalId as string).select('polyclinics').lean();
-        if (!hospital) {
-          return res.json({ success: true, data: [] });
-        }
-        
+        // Langsung cari Poliklinik berdasarkan hospitalId yang diberikan.
+        // Ini lebih andal dan tidak bergantung pada data di model Hospital.
         const polyclinics = await Polyclinic.find({
-          '_id': { $in: hospital.polyclinics },
-          'status': 'Active'
+          hospitalId: hospitalId as string,
+          status: 'Active' // Pasien hanya bisa melihat poli yang aktif
         }).lean();
-
+        
         return res.json({ success: true, data: polyclinics });
       }
+      // --- AKHIR PERBAIKAN ---
 
-      const { page = 1, limit = 10 } = req.query;
-      const query: any = { status: "Active" };
-      
+      // Logika untuk dashboard admin (tidak berubah)
+      const query: any = {};
       if (search) query.name = { $regex: search as string, $options: "i" };
       if (department) query.department = department as string;
+      if (status && status !== 'all') query.status = status as string;
 
       const pageNum = Number(page);
       const limitNum = Number(limit);
 
       const [polyclinics, total] = await Promise.all([
         Polyclinic.find(query)
-          .populate("assignedDoctors.doctorId", "name specialization") 
+          .populate({
+            path: 'assignedDoctors.doctorId',
+            model: 'User',
+            select: 'name specialization'
+          })
           .sort({ name: 1 })
           .limit(limitNum)
           .skip((pageNum - 1) * limitNum)
@@ -64,13 +69,16 @@ class PolyclinicController {
   public async getPolyclinicById(req: Request, res: Response, next: NextFunction) {
     try {
       const polyclinic = await Polyclinic.findById(req.params.id)
-        .populate('assignedDoctors.doctorId', 'name specialization')
+        .populate({
+          path: 'assignedDoctors.doctorId',
+          model: 'User',
+          select: 'name specialization'
+        })
         .lean(); 
 
       if (!polyclinic) {
         return res.status(404).json({ success: false, message: "Poliklinik tidak ditemukan" });
       }
-
       res.json({ success: true, data: polyclinic });
     } catch (error) {
       next(error);
@@ -79,8 +87,17 @@ class PolyclinicController {
 
   public async createPolyclinic(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const polyclinic = new Polyclinic(req.body);
+      const hospitalId = (req.user as any).hospital;
+      if (!hospitalId) {
+          return res.status(400).json({ success: false, message: "Admin tidak terasosiasi dengan rumah sakit manapun." });
+      }
+      
+      const polyclinicData = { ...req.body, hospitalId };
+      const polyclinic = new Polyclinic(polyclinicData);
       await polyclinic.save();
+
+      await Hospital.findByIdAndUpdate(hospitalId, { $addToSet: { polyclinics: polyclinic._id } });
+
       res.status(201).json({ 
         success: true, 
         message: "Poliklinik berhasil ditambahkan", 
@@ -88,7 +105,7 @@ class PolyclinicController {
       });
     } catch (error: any) {
       if (error.code === 11000) {
-        return res.status(400).json({ success: false, message: `Nama atau ID poliklinik sudah digunakan` });
+        return res.status(400).json({ success: false, message: `Nama poliklinik sudah digunakan.` });
       }
       next(error);
     }
@@ -97,7 +114,6 @@ class PolyclinicController {
   public async updatePolyclinic(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const polyclinic = await Polyclinic.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true }).lean();
-       
       if (!polyclinic) {
         return res.status(404).json({ success: false, message: "Poliklinik tidak ditemukan" });
       }
@@ -113,20 +129,23 @@ class PolyclinicController {
 
   public async deletePolyclinic(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const polyclinic = await Polyclinic.findByIdAndDelete(req.params.id);
+      const polyclinicId = req.params.id;
+      const polyclinic = await Polyclinic.findByIdAndDelete(polyclinicId);
       if (!polyclinic) {
         return res.status(404).json({ success: false, message: "Poliklinik tidak ditemukan" });
       }
+      
+      await Hospital.findByIdAndUpdate(polyclinic.hospitalId, { $pull: { polyclinics: polyclinicId } });
+
       res.json({ success: true, message: "Poliklinik berhasil dihapus" });
     } catch (error) {
       next(error);
     }
   }
 
-  // ✅ FUNGSI BARU DITAMBAHKAN
   public async getDepartments(req: Request, res: Response, next: NextFunction) {
     try {
-        const departments = await Polyclinic.distinct("department", { status: "Active" }); 
+        const departments = (Polyclinic.schema.path('department') as any).enumValues;
         res.json({ success: true, data: departments.filter(Boolean) });
     } catch (error) {
         next(error);

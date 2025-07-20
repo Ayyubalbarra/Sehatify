@@ -37,7 +37,17 @@ router.use("/admin", authenticateToken);
 
 router.get("/admin/profile", userAuthController.getProfile);
 router.put("/admin/profile", userAuthController.updateProfile);
-router.put("/admin/change-password", userAuthController.changePassword);
+
+// Ditambahkan validasi untuk memastikan input tidak kosong dan memenuhi syarat
+router.put(
+    "/admin/change-password", 
+    [
+        body('currentPassword').notEmpty().withMessage('Password saat ini harus diisi'),
+        body('newPassword').isLength({ min: 6 }).withMessage('Password baru minimal 6 karakter'),
+    ],
+    userAuthController.changePassword
+);
+
 router.post("/admin/logout", userAuthController.logout);
 router.get("/admin/verify-token", userAuthController.verifyToken);
 

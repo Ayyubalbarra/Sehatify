@@ -1,119 +1,88 @@
 // apps/admin/frontend/src/components/Modals/ScheduleModal.tsx
 
-"use client"
-
 import React, { useState, useEffect } from "react";
-import { X, Save, Calendar, Clock, User, Stethoscope, Loader2 } from "lucide-react";
+import { X, ArrowLeft } from "lucide-react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import { scheduleAPI, polyclinicAPI, doctorAPI } from "../../services/api";
-import type { ScheduleData, PolyclinicData, DoctorDataFromAdminAPI } from "../../types";
-// Interface untuk data form jadwal
-export interface ScheduleFormData {
-  _id?: string; // Hanya ada saat edit
-  scheduleId?: string; // Hanya ada saat edit
-  doctorId: string; // ID Dokter
-  polyclinicId: string; // ID Poliklinik
-  date: string; // Format YYYY-MM-DD
-  startTime: string; // Format HH:MM
-  endTime: string; // Format HH:MM
-  totalSlots: number;
-  notes?: string;
-  status: 'Active' | 'Cancelled' | 'Completed'; // Status wajib di form
-
-  // Properti tampilan yang tidak dikirim ke backend, tapi berguna untuk mengisi modal
-  doctorName?: string;
-  doctorSpecialization?: string;
-  polyclinicName?: string;
-  bookedSlots?: number;
-  availableSlots?: number;
-}
+import type { ScheduleData, PolyclinicData, DoctorDataFromAdminAPI, ScheduleFormData } from "../../types";
 
 interface ScheduleModalProps {
-  schedule?: ScheduleFormData; // Data jadwal untuk edit
+  mode: 'add' | 'edit' | 'view';
+  schedule?: ScheduleData; 
   onClose: () => void;
   onSave: () => void;
 }
 
-const ScheduleModal: React.FC<ScheduleModalProps> = ({ schedule, onClose, onSave }) => {
+const ScheduleModal: React.FC<ScheduleModalProps> = ({ mode, schedule, onClose, onSave }) => {
   const queryClient = useQueryClient();
-  const isEditMode = !!schedule?._id;
+  const isViewMode = mode === 'view';
 
   const [formData, setFormData] = useState<ScheduleFormData>({
     doctorId: "",
     polyclinicId: "",
-    date: new Date().toISOString().split('T')[0],
-    startTime: "09:00",
-    endTime: "17:00",
-    totalSlots: 20,
+    date: "",
+    startTime: "",
+    endTime: "",
+    totalSlots: 10,
     notes: "",
-    status: "Active", // Default status saat membuat jadwal baru
+    status: 'Active',
   });
 
-  // Fetch daftar dokter untuk dropdown
-  const { data: doctorsResponse, isLoading: isLoadingDoctors } = useQuery({
-    queryKey: ['doctorsList'],
-    queryFn: () => doctorAPI.getDoctors(1, 100, '', '', 'Active'), // Ambil semua dokter aktif
-    staleTime: Infinity, // Daftar dokter jarang berubah
+  // Fetch data dokter untuk dropdown
+  const { data: doctorsData } = useQuery({
+    queryKey: ["doctorsList"],
+    queryFn: () => doctorAPI.getDoctors(1, 100), // Ambil hingga 100 dokter
   });
-  const availableDoctors = doctorsResponse?.data || [];
+  const availableDoctors = doctorsData?.data || [];
 
-  // Fetch daftar poliklinik untuk dropdown
-  const { data: polyclinicsResponse, isLoading: isLoadingPolyclinics } = useQuery({
-    queryKey: ['polyclinicsList'],
-    queryFn: () => polyclinicAPI.getAllPolyclinics(1, 100, '', ''), // Ambil semua poliklinik
-    staleTime: Infinity, // Daftar poliklinik jarang berubah
+  // Fetch data poliklinik untuk dropdown
+  const { data: polyclinicsData } = useQuery({
+    queryKey: ["polyclinicsList"],
+    queryFn: () => polyclinicAPI.getAllPolyclinics(1, 100), // Ambil hingga 100 poliklinik
   });
-  const availablePolyclinics = polyclinicsResponse?.data || [];
+  const availablePolyclinics = polyclinicsData?.data || [];
 
   useEffect(() => {
     if (schedule) {
       setFormData({
         _id: schedule._id,
-        scheduleId: schedule.scheduleId,
         doctorId: schedule.doctorId,
         polyclinicId: schedule.polyclinicId,
-        date: new Date(schedule.date).toISOString().split('T')[0], // Format tanggal
+        date: new Date(schedule.date).toISOString().split('T')[0], // Format tanggal untuk input
         startTime: schedule.startTime,
         endTime: schedule.endTime,
         totalSlots: schedule.totalSlots,
-        notes: schedule.notes || "",
-        status: schedule.status || "Active", // Map status dari data yang ada
-        doctorName: schedule.doctorName,
-        doctorSpecialization: schedule.doctorSpecialization,
-        polyclinicName: schedule.polyclinicName,
-        bookedSlots: schedule.bookedSlots,
-        availableSlots: schedule.availableSlots,
+        notes: schedule.notes,
+        status: schedule.status,
       });
     }
   }, [schedule]);
 
-  const createMutation = useMutation({
-    mutationFn: async (data: ScheduleFormData) => {
-      // Filter properti tampilan yang tidak perlu dikirim ke backend
-      const { doctorName, doctorSpecialization, polyclinicName, bookedSlots, availableSlots, ...payload } = data;
-      // Memastikan payload sesuai dengan Omit<ScheduleData, ...>
-      return scheduleAPI.createSchedule(payload);
-    },
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value, type } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: type === "number" ? parseInt(value, 10) : value,
+    }));
+  };
+
+  const createScheduleMutation = useMutation({
+    mutationFn: (data: ScheduleFormData) => scheduleAPI.createSchedule(data),
     onSuccess: () => {
       toast.success("Jadwal berhasil ditambahkan");
-      onSave(); // Tutup modal dan refresh data
+      onSave();
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || "Gagal menambahkan jadwal.");
     },
   });
 
-  const updateMutation = useMutation({
-    mutationFn: async (data: ScheduleFormData) => {
-      // Filter properti tampilan yang tidak perlu dikirim ke backend
-      const { doctorName, doctorSpecialization, polyclinicName, bookedSlots, availableSlots, ...payload } = data;
-      // Memastikan payload sesuai dengan Partial<Omit<ScheduleData, ...>>
-      return scheduleAPI.updateSchedule(data._id as string, payload);
-    },
+  const updateScheduleMutation = useMutation({
+    mutationFn: (data: ScheduleFormData) => scheduleAPI.updateSchedule(data._id as string, data),
     onSuccess: () => {
       toast.success("Jadwal berhasil diperbarui");
-      onSave(); // Tutup modal dan refresh data
+      onSave();
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || "Gagal memperbarui jadwal.");
@@ -122,137 +91,95 @@ const ScheduleModal: React.FC<ScheduleModalProps> = ({ schedule, onClose, onSave
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.doctorId || !formData.polyclinicId || !formData.date || !formData.startTime || !formData.endTime || formData.totalSlots <= 0) {
-      toast.error("Mohon isi semua field wajib.");
-      return;
-    }
-
-    // Periksa totalSlots vs bookedSlots saat update
-    if (isEditMode && formData.totalSlots < (schedule?.bookedSlots || 0)) {
-      toast.error(`Total slot tidak boleh kurang dari slot yang sudah dipesan (${schedule?.bookedSlots}).`);
-      return;
-    }
-
-    if (isEditMode) {
-      updateMutation.mutate(formData);
+    if (isViewMode) return; // Jangan submit jika hanya melihat
+    if (schedule?._id) {
+      updateScheduleMutation.mutate(formData);
     } else {
-      createMutation.mutate(formData);
+      createScheduleMutation.mutate(formData);
     }
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { name, value, type } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: type === 'number' ? Number(value) : value,
-    }));
+  const getTitle = () => {
+    if (mode === 'view') return 'Detail Jadwal';
+    if (mode === 'edit') return 'Edit Jadwal';
+    return 'Tambah Jadwal Baru';
   };
 
-  const isLoading = createMutation.isPending || updateMutation.isPending || isLoadingDoctors || isLoadingPolyclinics;
+  const isLoading = createScheduleMutation.isPending || updateScheduleMutation.isPending;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6 overflow-y-auto max-h-[90vh]">
-        <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-200">
-          <div className="flex items-center space-x-3">
-            <Calendar size={24} className="text-blue-600" />
-            <h2 className="text-xl font-semibold text-slate-800">{isEditMode ? "Edit Jadwal" : "Tambah Jadwal Baru"}</h2>
-          </div>
-          <button onClick={onClose} className="text-slate-500 hover:text-slate-700">
-            <X size={24} />
-          </button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 backdrop-blur-sm">
+      <div className="relative w-full max-w-md rounded-lg bg-white shadow-lg m-4">
+        <div className="flex items-center gap-4 p-4 border-b">
+            <button onClick={onClose} className="rounded-full p-2 transition-colors hover:bg-slate-100">
+              <ArrowLeft size={20} className="text-slate-600" />
+            </button>
+            <h2 className="text-xl font-semibold text-slate-800">{getTitle()}</h2>
         </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Dokter */}
-          <div>
-            <label htmlFor="doctorId" className="block text-sm font-medium text-slate-700 mb-1">Dokter *</label>
-            {isLoadingDoctors ? (
-              <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
-            ) : (
-              <select name="doctorId" id="doctorId" value={formData.doctorId} onChange={handleInputChange} required className="w-full border border-slate-300 rounded-md p-2">
+        
+        <form onSubmit={handleSubmit}>
+          <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+            <div>
+              <label htmlFor="doctorId" className="mb-1 block text-sm font-medium text-slate-700">Dokter</label>
+              <select name="doctorId" id="doctorId" value={formData.doctorId} onChange={handleInputChange} required className="w-full border border-slate-300 rounded-md p-2 disabled:bg-slate-100 disabled:cursor-not-allowed" disabled={isViewMode}>
                 <option value="">Pilih Dokter</option>
-                {availableDoctors.map(doctor => (
+                {availableDoctors.map((doctor: DoctorDataFromAdminAPI) => ( 
                   <option key={doctor._id} value={doctor._id}>{doctor.name} ({doctor.specialization})</option>
                 ))}
               </select>
-            )}
-          </div>
-
-          {/* Poliklinik */}
-          <div>
-            <label htmlFor="polyclinicId" className="block text-sm font-medium text-slate-700 mb-1">Poliklinik *</label>
-            {isLoadingPolyclinics ? (
-              <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
-            ) : (
-              <select name="polyclinicId" id="polyclinicId" value={formData.polyclinicId} onChange={handleInputChange} required className="w-full border border-slate-300 rounded-md p-2">
+            </div>
+            <div>
+              <label htmlFor="polyclinicId" className="mb-1 block text-sm font-medium text-slate-700">Poliklinik</label>
+              <select name="polyclinicId" id="polyclinicId" value={formData.polyclinicId} onChange={handleInputChange} required className="w-full border border-slate-300 rounded-md p-2 disabled:bg-slate-100 disabled:cursor-not-allowed" disabled={isViewMode}>
                 <option value="">Pilih Poliklinik</option>
-                {availablePolyclinics.map(poly => (
+                {availablePolyclinics.map((poly: PolyclinicData) => ( 
                   <option key={poly._id} value={poly._id}>{poly.name}</option>
                 ))}
               </select>
-            )}
-          </div>
-
-          {/* Tanggal */}
-          <div>
-            <label htmlFor="date" className="block text-sm font-medium text-slate-700 mb-1">Tanggal *</label>
-            <input type="date" name="date" id="date" value={formData.date} onChange={handleInputChange} required className="w-full border border-slate-300 rounded-md p-2" />
-          </div>
-
-          {/* Waktu Mulai */}
-          <div>
-            <label htmlFor="startTime" className="block text-sm font-medium text-slate-700 mb-1">Waktu Mulai *</label>
-            <input type="time" name="startTime" id="startTime" value={formData.startTime} onChange={handleInputChange} required className="w-full border border-slate-300 rounded-md p-2" />
-          </div>
-
-          {/* Waktu Selesai */}
-          <div>
-            <label htmlFor="endTime" className="block text-sm font-medium text-slate-700 mb-1">Waktu Selesai *</label>
-            <input type="time" name="endTime" id="endTime" value={formData.endTime} onChange={handleInputChange} required className="w-full border border-slate-300 rounded-md p-2" />
-          </div>
-
-          {/* Total Slot */}
-          <div>
-            <label htmlFor="totalSlots" className="block text-sm font-medium text-slate-700 mb-1">Total Slot *</label>
-            <input type="number" name="totalSlots" id="totalSlots" value={formData.totalSlots} onChange={handleInputChange} required min="1" className="w-full border border-slate-300 rounded-md p-2" />
-            {isEditMode && formData.totalSlots < (schedule?.bookedSlots || 0) && (
-              <p className="text-red-500 text-xs mt-1">Total slot tidak boleh kurang dari slot yang sudah dipesan ({schedule?.bookedSlots}).</p>
-            )}
-          </div>
-
-          {/* Notes (opsional) */}
-          <div className="col-span-full">
-            <label htmlFor="notes" className="block text-sm font-medium text-slate-700 mb-1">Catatan</label>
-            <textarea name="notes" id="notes" value={formData.notes || ''} onChange={handleInputChange} rows={3} className="w-full border border-slate-300 rounded-md p-2"></textarea>
-          </div>
-          
-          {/* Status (saat edit mode) */}
-          {isEditMode && (
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="date" className="mb-1 block text-sm font-medium text-slate-700">Tanggal</label>
+                <input type="date" id="date" name="date" value={formData.date} onChange={handleInputChange} className="w-full rounded-md border border-slate-300 p-2 disabled:bg-slate-100 disabled:cursor-not-allowed" required readOnly={isViewMode} />
+              </div>
+              <div>
+                <label htmlFor="totalSlots" className="mb-1 block text-sm font-medium text-slate-700">Total Slot</label>
+                <input type="number" id="totalSlots" name="totalSlots" value={formData.totalSlots} onChange={handleInputChange} className="w-full rounded-md border border-slate-300 p-2 disabled:bg-slate-100 disabled:cursor-not-allowed" required min="1" readOnly={isViewMode} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="startTime" className="mb-1 block text-sm font-medium text-slate-700">Waktu Mulai</label>
+                <input type="time" id="startTime" name="startTime" value={formData.startTime} onChange={handleInputChange} className="w-full rounded-md border border-slate-300 p-2 disabled:bg-slate-100 disabled:cursor-not-allowed" required readOnly={isViewMode} />
+              </div>
+              <div>
+                <label htmlFor="endTime" className="mb-1 block text-sm font-medium text-slate-700">Waktu Selesai</label>
+                <input type="time" id="endTime" name="endTime" value={formData.endTime} onChange={handleInputChange} className="w-full rounded-md border border-slate-300 p-2 disabled:bg-slate-100 disabled:cursor-not-allowed" required readOnly={isViewMode} />
+              </div>
+            </div>
             <div>
-              <label htmlFor="status" className="block text-sm font-medium text-slate-700 mb-1">Status</label>
-              <select name="status" id="status" value={formData.status} onChange={handleInputChange} className="w-full border border-slate-300 rounded-md p-2">
-                <option value="Active">Active</option>
-                <option value="Cancelled">Cancelled</option>
-                <option value="Completed">Completed</option>
+              <label htmlFor="status" className="mb-1 block text-sm font-medium text-slate-700">Status</label>
+              <select name="status" id="status" value={formData.status} onChange={handleInputChange} className="w-full border border-slate-300 rounded-md p-2 disabled:bg-slate-100 disabled:cursor-not-allowed" required disabled={isViewMode}>
+                  <option value="Active">Aktif</option>
+                  <option value="Cancelled">Dibatalkan</option>
+                  <option value="Full">Penuh</option>
               </select>
             </div>
-          )}
-
-          <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-200">
-            <button type="button" onClick={onClose} className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">
-              Batal
+            <div>
+              <label htmlFor="notes" className="mb-1 block text-sm font-medium text-slate-700">Catatan</label>
+              <textarea id="notes" name="notes" value={formData.notes || ''} onChange={handleInputChange} className="w-full rounded-md border border-slate-300 p-2 disabled:bg-slate-100 disabled:cursor-not-allowed" rows={2} readOnly={isViewMode}></textarea>
+            </div>
+          </div>
+          
+          <div className="flex justify-end gap-3 p-4 border-t bg-slate-50 rounded-b-lg">
+            <button type="button" onClick={onClose} className="rounded-md border border-slate-300 px-4 py-2 text-slate-700 transition-colors hover:bg-slate-100">
+              {isViewMode ? "Tutup" : "Batal"}
             </button>
-            <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50" disabled={isLoading}>
-              {isLoading ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin inline-block" />
-                  Menyimpan...
-                </>
-              ) : (
-                "Simpan"
-              )}
-            </button>
+            {!isViewMode && (
+              <button type="submit" className="rounded-md bg-blue-600 px-4 py-2 text-white transition-colors hover:bg-blue-700 disabled:bg-blue-400" disabled={isLoading}>
+                {isLoading ? "Menyimpan..." : (schedule ? "Perbarui" : "Tambah")}
+              </button>
+            )}
           </div>
         </form>
       </div>

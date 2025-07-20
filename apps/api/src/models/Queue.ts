@@ -2,7 +2,6 @@
 
 import mongoose, { Document, Schema, Model } from 'mongoose';
 
-// Tipe IQueue tidak perlu diekspor jika hanya digunakan di sini
 interface IQueue extends Document {
   patientId: Schema.Types.ObjectId;
   doctorId: Schema.Types.ObjectId;
@@ -22,7 +21,7 @@ const queueSchema: Schema<IQueue> = new Schema(
     doctorId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true }, 
     polyclinicId: { type: Schema.Types.ObjectId, ref: "Polyclinic", required: true, index: true },
     scheduleId: { type: Schema.Types.ObjectId, ref: "Schedule", required: true },
-    queueNumber: { type: Number }, // Dibuat otomatis, jadi tidak 'required'
+    queueNumber: { type: Number }, 
     queueDate: { type: Date, required: true, index: true },
     appointmentTime: { type: String, required: true },
     status: {
@@ -39,8 +38,6 @@ const queueSchema: Schema<IQueue> = new Schema(
   }
 );
 
-// ✅ HOOK UNTUK MEMBUAT NOMOR ANTRIAN OTOMATIS
-// Sebelum menyimpan antrian baru, cari nomor terakhir di jadwal yang sama dan +1
 queueSchema.pre<IQueue>('save', async function (next) {
   if (this.isNew) {
     const lastQueue = await mongoose.model('Queue').findOne({ scheduleId: this.scheduleId }).sort({ queueNumber: -1 });

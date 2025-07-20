@@ -1,9 +1,10 @@
+// apps/api/src/controllers/doctorController.ts
+
 import { Request, Response, NextFunction } from 'express';
 import { validationResult } from 'express-validator';
 import User from "../models/User";
 import Polyclinic from '../models/Polyclinic';
 import Schedule from '../models/Schedule';
-import { AuthRequest } from '../middleware/auth';
 
 class DoctorController {
 
@@ -15,7 +16,6 @@ class DoctorController {
     this.deleteDoctor = this.deleteDoctor.bind(this);
     this.getDoctorStats = this.getDoctorStats.bind(this);
     this.getDoctorSchedule = this.getDoctorSchedule.bind(this);
-    // ✅ Tambahkan bind untuk fungsi baru
     this.updateDoctorSchedule = this.updateDoctorSchedule.bind(this);
   }
 
@@ -23,18 +23,15 @@ class DoctorController {
     try {
       const { page = '1', limit = '10', specialization, status, search, polyclinicId } = req.query as any;
       
-      const filter: any = { role: "doctor" };
+      const filter: any = { role: "doctor", isActive: true }; // Tampilkan hanya dokter yang aktif
 
+      // --- PERBAIKAN DI SINI ---
+      // Logika diubah menjadi lebih sederhana dan langsung
       if (polyclinicId) {
-        const polyclinic = await Polyclinic.findById(polyclinicId).select('assignedDoctors').lean();
-        if (polyclinic && polyclinic.assignedDoctors) {
-          const doctorIds = polyclinic.assignedDoctors.map((ad: any) => ad.doctorId);
-          filter._id = { $in: doctorIds };
-        } else {
-          res.json({ success: true, data: [], pagination: { totalPages: 0, currentPage: 1, total: 0 }});
-          return;
-        }
+        // Langsung filter User (dokter) yang memiliki polyclinicId yang cocok.
+        filter.polyclinicId = polyclinicId;
       }
+      // --- AKHIR PERBAIKAN ---
       
       if (specialization) filter.specialization = specialization;
       if (status) filter.isActive = status === "active";
@@ -83,7 +80,7 @@ class DoctorController {
       const doctor = new User(doctorData);
       await doctor.save();
       const doctorResponse = doctor.toObject();
-      delete doctorResponse.password;
+      delete (doctorResponse as any).password;
       res.status(201).json({ success: true, message: "Dokter berhasil dibuat", data: doctorResponse });
     } catch (error) {
       next(error);
@@ -160,9 +157,7 @@ class DoctorController {
     }
   }
 
-  // ✅ FUNGSI BARU DITAMBAHKAN
   public async updateDoctorSchedule(req: Request, res: Response, next: NextFunction): Promise<void> {
-    // Ini adalah placeholder. Logika untuk update jadwal bisa ditambahkan di sini nanti.
     res.status(501).json({ success: false, message: "Fungsi update jadwal dokter belum diimplementasikan." });
   }
 }

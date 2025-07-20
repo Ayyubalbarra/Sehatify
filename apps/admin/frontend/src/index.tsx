@@ -1,20 +1,29 @@
-import React from "react"
-import ReactDOM from "react-dom/client"
-import "./index.css"
-import App from "./App"
+// apps/admin/frontend/src/index.tsx
 
-// 1. Import komponen yang dibutuhkan
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import React from "react";
+import ReactDOM from "react-dom/client";
+import { BrowserRouter } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { AuthProvider } from "./contexts/AuthContext";
+import { NotificationProvider } from "./contexts/NotificationContext";
+import App from "./App";
+import "./index.css";
 
-// 2. Buat instance baru dari QueryClient
-const queryClient = new QueryClient()
+// Buat instance baru dari QueryClient
+const queryClient = new QueryClient();
 
-const root = ReactDOM.createRoot(document.getElementById("root") as HTMLElement)
+const root = ReactDOM.createRoot(document.getElementById("root") as HTMLElement);
 root.render(
   <React.StrictMode>
-    {/* 3. Bungkus komponen <App /> dengan QueryClientProvider */}
-    <QueryClientProvider client={queryClient}>
-      <App />
-    </QueryClientProvider>
+    {/* 1. BrowserRouter membungkus semuanya dari sini */}
+    <BrowserRouter>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <NotificationProvider>
+            <App />
+          </NotificationProvider>
+        </AuthProvider>
+      </QueryClientProvider>
+    </BrowserRouter>
   </React.StrictMode>
-)
+);

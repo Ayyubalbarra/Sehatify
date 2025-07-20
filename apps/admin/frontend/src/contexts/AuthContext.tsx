@@ -2,11 +2,11 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import toast from "react-hot-toast";
-import { authAPI } from "../services/api"; // Menggunakan authAPI untuk admin
-import { User, LoginCredentials, AuthResponse } from "../types"; // Import User dari ../types
+import { authAPI } from "../services/api"; 
+import { User, LoginCredentials, AuthResponse } from "../types"; 
 
 interface AuthContextType {
-  user: User | null; // Pastikan ini User
+  user: User | null; 
   token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
@@ -39,28 +39,28 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   useEffect(() => {
     const initializeAuth = async () => {
       try {
-        const savedToken = localStorage.getItem("token");
+        const savedToken = localStorage.getItem("authToken"); // ✅ Menggunakan "authToken"
         const savedUser = localStorage.getItem("user");
 
         if (savedToken && savedUser) {
-          const parsedUser: User = JSON.parse(savedUser); // Pastikan ini User
+          const parsedUser: User = JSON.parse(savedUser); 
           setToken(savedToken);
           setUser(parsedUser);
 
           try {
-            const response = await authAPI.verifyToken(); // Memanggil verifyToken dari authAPI admin
+            const response = await authAPI.verifyToken(); 
             if (response.success && response.data?.user) {
               setUser(response.data.user);
               localStorage.setItem("user", JSON.stringify(response.data.user)); 
             } else {
-              localStorage.removeItem("token");
+              localStorage.removeItem("authToken"); // ✅ Menggunakan "authToken"
               localStorage.removeItem("user");
               setToken(null);
               setUser(null);
             }
           } catch (error) {
             console.error("Admin token verification failed:", error);
-            localStorage.removeItem("token");
+            localStorage.removeItem("authToken"); // ✅ Menggunakan "authToken"
             localStorage.removeItem("user");
             setToken(null);
             setUser(null);
@@ -68,7 +68,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         }
       } catch (error) {
         console.error("Error initializing admin auth state:", error);
-        localStorage.removeItem("token");
+        localStorage.removeItem("authToken"); // ✅ Menggunakan "authToken"
         localStorage.removeItem("user");
         setToken(null);
         setUser(null);
@@ -83,15 +83,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const login = async (credentials: LoginCredentials) => {
     try {
       setIsLoading(true);
-      const response: AuthResponse = await authAPI.login(credentials); // Respons harus User
+      const response: AuthResponse = await authAPI.login(credentials); 
 
       if (response.success && response.data) {
         const { user: userData, token: userToken } = response.data;
-        setUser(userData); // userData sekarang adalah User
+        setUser(userData); 
         setToken(userToken);
-        localStorage.setItem("token", userToken);
+        localStorage.setItem("authToken", userToken); // ✅ Menggunakan "authToken"
         localStorage.setItem("user", JSON.stringify(userData));
-        toast.success(`Selamat datang, ${userData.name || 'Admin'}!`); // Gunakan userData.name
+        toast.success(`Selamat datang, ${userData.name || 'Admin'}!`); 
       } else {
         throw new Error(response.message || "Login gagal");
       }
@@ -107,15 +107,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const demoLogin = async () => {
     try {
       setIsLoading(true);
-      const response: AuthResponse = await authAPI.demoLogin(); // Respons harus User
+      const response: AuthResponse = await authAPI.demoLogin(); 
 
       if (response.success && response.data) {
         const { user: userData, token: userToken } = response.data;
         setUser(userData);
         setToken(userToken);
-        localStorage.setItem("token", userToken);
+        localStorage.setItem("authToken", userToken); // ✅ Menggunakan "authToken"
         localStorage.setItem("user", JSON.stringify(userData));
-        toast.success(`Login demo berhasil! Selamat datang, ${userData.name}`); // Gunakan userData.name
+        toast.success(`Login demo berhasil! Selamat datang, ${userData.name}`); 
       } else {
         throw new Error(response.message || "Login demo gagal");
       }
@@ -131,13 +131,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const logout = () => {
     setUser(null);
     setToken(null);
-    localStorage.removeItem("token");
+    localStorage.removeItem("authToken"); // ✅ Menggunakan "authToken"
     localStorage.removeItem("user");
     toast.success("Anda telah logout");
     window.location.href = "/login"; 
   };
 
-  const updateUser = async (userData: Partial<User>) => { // userData adalah Partial<User>
+  const updateUser = async (userData: Partial<User>) => { 
     try {
       setIsLoading(true);
       const response = await authAPI.updateProfile(userData); 
@@ -162,7 +162,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const refreshUser = async () => {
     try {
       if (!token) return;
-      const response = await authAPI.getProfile(); // Mengembalikan User
+      const response = await authAPI.getProfile(); 
       if (response.success && response.data?.user) {
         setUser(response.data.user);
         localStorage.setItem("user", JSON.stringify(response.data.user));

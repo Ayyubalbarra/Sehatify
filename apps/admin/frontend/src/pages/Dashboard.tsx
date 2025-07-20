@@ -4,129 +4,96 @@
 
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Users, Zap, Heart, Building, Loader2, AlertTriangle, Calendar, BarChart3 } from 'lucide-react';
-import Card from '../components/Card'; 
-import Button from '../components/Button'; 
-import MetricCard from '../components/Dashboard/MetricCard'; 
-import HealthTrendChart from '../components/charts/HealthTrendChart'; 
-import HealthMetricsChart from '../components/charts/HealthMetricsChart'; 
-import AIInsightCard from '../components/Dashboard/AIInsightCard'; 
-import SystemInfoCard from '../components/Dashboard/SystemInfoCard'; 
-import QuickActionsCard from '../components/Dashboard/QuickActionsCard'; 
-import { useAuth } from '../contexts/AuthContext'; 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'; 
-import toast from 'react-hot-toast'; 
-import { dashboardAPI, inventoryAPI } from '../services/api';
-import type { 
-  ApiResponse, 
-  User, 
-  DashboardOverviewApiData, 
-  ChartDataForRecharts, 
-  FinancialSummaryData, 
-  ServiceDistributionData 
+import { Users, Zap, Heart, Building, Loader2, Clock } from 'lucide-react';
+import Card from '../components/Card';
+import MetricCard from '../components/Dashboard/MetricCard';
+import HealthTrendChart from '../components/charts/HealthTrendChart';
+import HealthMetricsChart from '../components/charts/HealthMetricsChart';
+import AIInsightCard from '../components/Dashboard/AIInsightCard';
+import { useAuth } from '../contexts/AuthContext';
+import { useQuery } from '@tanstack/react-query';
+import { dashboardAPI } from '../services/api';
+import type {
+  ApiResponse,
+  User,
+  DashboardOverviewApiData,
+  ChartDataForRecharts,
 } from '../types';
+
+// Interface untuk Today's Queue List
+interface QueueListItem {
+    _id: string;
+    queueNumber: number;
+    patientName: string;
+    polyclinicName: string;
+    doctorName: string;
+    appointmentTime: string;
+    status: 'Waiting' | 'In Progress' | 'Completed' | 'Cancelled' | 'No Show';
+    patientPhone: string;
+}
+
+interface TodayQueueData {
+    totalQueues: number;
+    summary: {
+        waiting: number;
+        inProgress: number;
+        completed: number;
+    };
+    queues: QueueListItem[];
+}
+
 
 const Dashboard: React.FC = () => {
   const { user, isAuthenticated, isLoading: isLoadingAuth, refreshUser } = useAuth();
-  const queryClient = useQueryClient(); 
 
   React.useEffect(() => {
-    // Gunakan 'User' langsung karena sudah diimpor
     if (isAuthenticated && user && !(user as User).name) {
-      refreshUser(); 
+      refreshUser();
     }
   }, [isAuthenticated, user, refreshUser]);
 
-  // Sisa kode tidak perlu diubah...
-  const dashboardCards = [
-    {
-      icon: Calendar,
-      title: 'Data Pasien', 
-      description: 'Kelola dan lihat data pasien', 
-      link: '/data-pasien', 
-      color: 'bg-blue-500'
-    },
-    {
-      icon: BarChart3, 
-      title: 'Laporan & Analisis',
-      description: 'Akses laporan keuangan dan operasional',
-      link: '/laporan-analisis',
-      color: 'bg-green-500'
-    },
-    {
-      icon: AlertTriangle, 
-      title: 'Stok Medis',
-      description: 'Pantau inventaris dan stok rendah',
-      link: '/stok-medis',
-      color: 'bg-purple-500'
-    },
-    {
-      icon: Calendar, 
-      title: 'Jadwal & SDM',
-      description: 'Kelola jadwal dokter dan staf',
-      link: '/jadwal-sdm',
-      color: 'bg-red-500'
-    }
-  ];
-
   const { data: adminOverviewResponse, isLoading: isLoadingAdminOverview } = useQuery<ApiResponse<DashboardOverviewApiData>>({
     queryKey: ['adminDashboardOverview'],
-    queryFn: () => dashboardAPI.getAdminDashboardOverview(), 
+    queryFn: () => dashboardAPI.getAdminDashboardOverview(),
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
   const adminOverviewData = adminOverviewResponse?.data;
 
   const { data: patientsPerWeekResponse, isLoading: isLoadingPatientsPerWeek } = useQuery<ApiResponse<ChartDataForRecharts[]>>({
     queryKey: ['patientsPerWeek'],
-    queryFn: () => dashboardAPI.getPatientsPerWeek(), 
+    queryFn: () => dashboardAPI.getPatientsPerWeek(),
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
   const patientsPerWeekData = patientsPerWeekResponse?.data || [];
 
   const { data: patientsPerHourResponse, isLoading: isLoadingPatientsPerHour } = useQuery<ApiResponse<ChartDataForRecharts[]>>({
     queryKey: ['patientsPerHour'],
-    queryFn: () => dashboardAPI.getPatientsPerHour(), 
+    queryFn: () => dashboardAPI.getPatientsPerHour(),
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
   const patientsPerHourData = patientsPerHourResponse?.data || [];
 
-  const { data: aiInsightsResponse, isLoading: isLoadingAIInsights } = useQuery<ApiResponse<{ summary: string; recommendations: { id: string; text: string; priority: "high" | "medium" | "low" }[] }>>({ 
+  const { data: aiInsightsResponse, isLoading: isLoadingAIInsights } = useQuery<ApiResponse<{ summary: string; recommendations: { id: string; text: string; priority: "high" | "medium" | "low" }[] }>>({
     queryKey: ['aiInsights'],
-    queryFn: () => dashboardAPI.getAIInsights(), 
+    queryFn: () => dashboardAPI.getAIInsights(),
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
   const aiInsightSummary = aiInsightsResponse?.data?.summary;
   const aiRecommendations = aiInsightsResponse?.data?.recommendations || [];
 
-  const todayAbsorption = React.useMemo(() => {
-    return [
-      { id: '1', text: `Stok darah O- rendah (${adminOverviewData?.bloodUnitsOminus || 0} unit tersedia)`, priority: adminOverviewData?.bloodUnitsOminus && adminOverviewData.bloodUnitsOminus <= 10 ? "high" : "low" as "high" | "medium" | "low" },
-      { id: '2', text: `Pasien meningkat ${adminOverviewData?.patientTrendData?.[0]?.value || 0}% dibandingkan kemarin`, priority: "medium" as "high" | "medium" | "low" }, 
-      { id: '3', text: `Shift malam perlu tambahan perawat`, priority: "low" as "high" | "medium" | "low" }, 
-    ];
-  }, [adminOverviewData]);
-
-  const { data: systemHealthResponse, isLoading: isLoadingSystemHealth } = useQuery<ApiResponse<any>>({
-    queryKey: ['systemHealth'],
-    queryFn: () => dashboardAPI.getSystemHealth(), 
+  const { data: todayQueuesResponse, isLoading: isLoadingTodayQueues } = useQuery<ApiResponse<TodayQueueData>>({
+    queryKey: ['todayQueues'],
+    queryFn: () => dashboardAPI.getTodayQueueList(),
+    staleTime: 60 * 1000,
+    refetchInterval: 30 * 1000,
   });
-  const systemHealthData = systemHealthResponse?.data;
+  const todayQueuesData = todayQueuesResponse?.data;
 
-  const seedDatabaseMutation = useMutation({
-    mutationFn: async () => {
-      toast.error("Seed Database API belum diimplementasikan di backend!");
-      return Promise.reject("Not Implemented"); 
-    },
-    onSuccess: () => {
-      toast.success("Database berhasil diisi dengan data sampel!");
-      queryClient.invalidateQueries({ queryKey: ['adminDashboardOverview'] });
-      queryClient.invalidateQueries({ queryKey: ['patientsPerWeek'] });
-      queryClient.invalidateQueries({ queryKey: ['patientsPerHour'] });
-      queryClient.invalidateQueries({ queryKey: ['aiInsights'] });
-      queryClient.invalidateQueries({ queryKey: ['systemHealth'] });
-    },
-    onError: (error: any) => {
-      toast.error(`Gagal mengisi database: ${error.response?.data?.message || error.message}`);
-    },
-  });
-
-  const overallLoading = isLoadingAuth || isLoadingAdminOverview || isLoadingPatientsPerWeek || isLoadingPatientsPerHour || isLoadingAIInsights || isLoadingSystemHealth;
+  const overallLoading = isLoadingAuth || isLoadingAdminOverview || isLoadingPatientsPerWeek || isLoadingPatientsPerHour || isLoadingAIInsights || isLoadingTodayQueues;
 
   if (isLoadingAuth) {
     return (
@@ -146,7 +113,7 @@ const Dashboard: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6 p-6"> 
+    <div className="space-y-6 p-6">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-slate-800">Dashboard Overview</h1>
         <p className="text-slate-500">Selayang pandang manajemen rumah sakit Anda.</p>
@@ -178,15 +145,16 @@ const Dashboard: React.FC = () => {
           )}
         </div>
 
-        <AIInsightCard 
-          summary={aiInsightSummary} 
-          recommendations={aiRecommendations} 
+        <AIInsightCard
+          summary={aiInsightSummary || "AI Insight sedang dimuat atau tidak tersedia."}
+          recommendations={aiRecommendations}
           isLoading={isLoadingAIInsights}
         />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
+        {/* PERUBAHAN: Dibuat menjadi full-width */}
+        <div className="lg:col-span-3">
           {overallLoading && patientsPerHourData.length === 0 ? (
             <div className="flex justify-center items-center h-64 bg-white rounded-lg border border-gray-100">
               <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
@@ -196,21 +164,62 @@ const Dashboard: React.FC = () => {
             <HealthMetricsChart title="Pasien per Jam" type="bar" data={patientsPerHourData} />
           )}
         </div>
-
-        <SystemInfoCard healthData={systemHealthData} isLoading={isLoadingSystemHealth} />
+        {/* PERUBAHAN: SystemInfoCard dihapus dari sini */}
       </div>
       
+      {/* PERUBAHAN: Dibuat menjadi full-width */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          <QuickActionsCard onSeedDatabase={seedDatabaseMutation.mutate} isSeeding={seedDatabaseMutation.isPending} />
+        <div className="lg:col-span-3">
+          <Card className="p-6">
+            <h2 className="text-xl font-bold text-slate-800 mb-4">Antrian Hari Ini</h2>
+            {isLoadingTodayQueues ? (
+                <div className="flex justify-center items-center h-48">
+                    <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                    <p className="ml-2 text-slate-500">Memuat data antrian...</p>
+                </div>
+            ) : todayQueuesData && todayQueuesData.queues.length > 0 ? (
+                <>
+                    <div className="grid grid-cols-3 text-sm font-semibold text-slate-600 mb-2 border-b pb-2">
+                        <div className="col-span-1">No. Antrian</div>
+                        <div className="col-span-1">Pasien & Poli</div>
+                        <div className="col-span-1">Dokter & Waktu</div>
+                    </div>
+                    <ul className="space-y-3 max-h-80 overflow-y-auto">
+                        {todayQueuesData.queues.map(queue => (
+                            <li key={queue._id} className="grid grid-cols-3 items-start text-sm">
+                                <div className="col-span-1 font-bold text-blue-600 flex items-center gap-2">
+                                    <Clock size={16} />{queue.queueNumber}
+                                </div>
+                                <div className="col-span-1">
+                                    <p className="font-medium text-slate-800">{queue.patientName}</p>
+                                    <p className="text-xs text-slate-500">{queue.polyclinicName}</p>
+                                    <p className="text-xs text-slate-500">{queue.patientPhone}</p>
+                                </div>
+                                <div className="col-span-1">
+                                    <p className="font-medium text-slate-800">{queue.doctorName}</p>
+                                    <p className="text-xs text-slate-500">{queue.appointmentTime}</p>
+                                    <span className={`text-xs font-semibold rounded-full px-2 py-0.5 mt-1 inline-block
+                                        ${queue.status === 'Waiting' ? 'bg-orange-100 text-orange-700' :
+                                          queue.status === 'In Progress' ? 'bg-blue-100 text-blue-700' :
+                                          queue.status === 'Completed' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'}`}>
+                                        {queue.status}
+                                    </span>
+                                </div>
+                            </li>
+                        ))}
+                    </ul>
+                    <div className="mt-4 text-sm text-slate-600">
+                        Total antrian: {todayQueuesData.totalQueues} | Menunggu: {todayQueuesData.summary.waiting} | Dalam Proses: {todayQueuesData.summary.inProgress} | Selesai: {todayQueuesData.summary.completed}
+                    </div>
+                </>
+            ) : (
+                <div className="text-center py-8 text-slate-500">Tidak ada antrian hari ini.</div>
+            )}
+          </Card>
         </div>
-
-        <AIInsightCard 
-          summary="Serapan Hari Ini"
-          recommendations={todayAbsorption}
-          isLoading={overallLoading}
-        />
+        {/* PERUBAHAN: QuickActionsCard dihapus dari sini */}
       </div>
+      {/* PERUBAHAN: Tombol Seed Database di bagian bawah juga dihapus */}
     </div>
   )
 }

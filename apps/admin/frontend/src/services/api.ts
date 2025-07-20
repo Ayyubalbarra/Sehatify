@@ -1,7 +1,8 @@
 // apps/admin/frontend/src/services/api.ts
-
+// ... (semua kode sebelum polyclinicAPI tetap sama) ...
 import axios, { type AxiosInstance, type AxiosResponse, type AxiosError } from "axios"
 import toast from "react-hot-toast"
+
 import type { 
   User, 
   AuthResponse, 
@@ -9,9 +10,8 @@ import type {
   ChangePasswordData, 
   ApiResponse, 
   Setting,
-  ChatApiResponse,
+  ChatApiResponse, 
   PatientsApiResponse,
-  PatientStatsApiResponse,
   PatientData,
   DashboardOverviewApiData,
   ChartDataForRecharts,
@@ -24,18 +24,52 @@ import type {
   InventoryItemData,
   ScheduleApiResponse,
   ScheduleData,
-  DoctorListApiResponse
+  ScheduleFormData,
+  ScheduleStatsApiResponse,
+  DoctorListApiResponse,
+  Notification,
+  PatientStatsApiResponse 
 } from "../types" 
 
-const api: AxiosInstance = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || "http://localhost:5000/api/v1", 
-  timeout: 10000,
+// Definisi tipe payload untuk create operations
+type CreateInventoryPayload = Omit<InventoryItemData, '_id' | 'createdAt' | 'updatedAt' | 'currentStock' | 'status'> & {
+    status?: 'In Stock' | 'Low Stock' | 'Out of Stock'; 
+};
+type CreatePatientPayload = Omit<PatientData, '_id' | 'createdAt' | 'updatedAt' | 'lastVisit' | 'status'>; 
+type CreateSchedulePayload = Omit<ScheduleData, '_id' | 'createdAt' | 'updatedAt' | 'bookedSlots' | 'availableSlots' | 'doctorInfo' | 'polyclinicInfo'>; 
+
+// --- BARU: Tambahkan tipe payload untuk poliklinik
+export type PolyclinicPayload = Omit<PolyclinicData, '_id' | 'polyclinicId' | 'createdAt' | 'updatedAt' | 'hospitalId'>
+
+interface TodayQueueApiResponse {
+    totalQueues: number;
+    summary: {
+        waiting: number;
+        inProgress: number;
+        completed: number;
+    };
+    queues: Array<{
+        _id: string;
+        queueNumber: number;
+        patientName: string;
+        polyclinicName: string;
+        doctorName: string;
+        appointmentTime: string;
+        status: 'Waiting' | 'In Progress' | 'Completed' | 'Cancelled' | 'No Show';
+        patientPhone: string;
+    }>;
+}
+
+
+const api = axios.create({
+  baseURL: import.meta.env.VITE_API_URL || "http://localhost:5000/api/v1",
+  timeout: 30000,
   headers: { "Content-Type": "application/json" },
 })
 
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem("token")
+    const token = localStorage.getItem("authToken")
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
@@ -51,7 +85,7 @@ api.interceptors.response.use(
   (error: AxiosError) => {
     const message = (error.response?.data as any)?.message || error.message || "An error occurred"
     if (error.response?.status === 401) {
-      localStorage.removeItem("token")
+      localStorage.removeItem("authToken")
       localStorage.removeItem("user")
       if (window.location.pathname !== '/login') {
         window.location.href = "/login"
@@ -65,9 +99,8 @@ api.interceptors.response.use(
 )
 
 // =========================================================
-// API SERVICES
+// API SERVICES (TETAP SAMA)
 // =========================================================
-
 export const authAPI = {
   login: async (credentials: LoginCredentials): Promise<AuthResponse> => {
     const response = await api.post<AuthResponse>("/auth/admin/login", credentials) 
@@ -94,7 +127,6 @@ export const authAPI = {
     return response.data;
   }
 }
-
 export const settingAPI = {
   getSettings: async (): Promise<ApiResponse<Setting>> => {
     const response = await api.get("/settings");
@@ -105,7 +137,6 @@ export const settingAPI = {
     return response.data;
   }
 }
-
 export const dashboardAPI = {
   getAdminDashboardOverview: async (): Promise<ApiResponse<DashboardOverviewApiData>> => {
     const response = await api.get<ApiResponse<DashboardOverviewApiData>>("/dashboard/admin-overview"); 
@@ -143,25 +174,31 @@ export const dashboardAPI = {
     const response = await api.get<ApiResponse<ChartDataForRecharts[]>>(`/dashboard/charts?type=${type}`, { params: { period } });
     return response.data;
   },
+  getTodayQueueList: async (): Promise<ApiResponse<TodayQueueApiResponse>> => {
+      const response = await api.get<ApiResponse<TodayQueueApiResponse>>("/dashboard/today-queues");
+      return response.data;
+  },
+  seedDatabase: async (): Promise<ApiResponse<any>> => { 
+      const response = await api.post<ApiResponse<any>>("/seed/database"); 
+      return response.data;
+  },
 }
-
 export const aiAPI = {
   sendChatMessage: async (message: string): Promise<ChatApiResponse> => {
     const response = await api.post<ChatApiResponse>("/ai/chat", { message });
     return response.data;
   },
 };
-
 export const patientAPI = {
   getPatients: async (page = 1, limit = 10, search = "", status = "all"): Promise<PatientsApiResponse> => {
     const response = await api.get<PatientsApiResponse>("/patients", { params: { page, limit, search, status } });
     return response.data;
   },
-  getPatientStats: async (): Promise<PatientStatsApiResponse> => {
-    const response = await api.get<PatientStatsApiResponse>("/patients/stats");
+  getPatientStats: async (): Promise<ApiResponse<PatientStatsApiResponse>> => { 
+    const response = await api.get<ApiResponse<PatientStatsApiResponse>>("/patients/stats"); 
     return response.data;
   },
-  createPatient: async (patientData: Omit<PatientData, '_id'>): Promise<ApiResponse<PatientData>> => {
+  createPatient: async (patientData: CreatePatientPayload): Promise<ApiResponse<PatientData>> => { 
     const response = await api.post<ApiResponse<PatientData>>("/patients", patientData);
     return response.data;
   },
@@ -174,17 +211,16 @@ export const patientAPI = {
     return response.data;
   },
 }
-
 export const inventoryAPI = {
   getInventoryItems: async (page = 1, limit = 10, search = "", category = "", status = ""): Promise<InventoryApiResponse> => {
     const response = await api.get<InventoryApiResponse>("/inventory", { params: { page, limit, search, category, status } });
     return response.data;
   },
-  getInventoryStats: async (): Promise<InventoryStatsApiResponse> => {
-    const response = await api.get<InventoryStatsApiResponse>("/inventory/stats");
+  getInventoryStats: async (): Promise<ApiResponse<InventoryStatsApiResponse>> => { 
+    const response = await api.get<ApiResponse<InventoryStatsApiResponse>>("/inventory/stats"); 
     return response.data;
   },
-  createInventoryItem: async (itemData: Omit<InventoryItemData, '_id'>): Promise<ApiResponse<InventoryItemData>> => {
+  createInventoryItem: async (itemData: CreateInventoryPayload): Promise<ApiResponse<InventoryItemData>> => { 
     const response = await api.post<ApiResponse<InventoryItemData>>("/inventory", itemData);
     return response.data;
   },
@@ -197,34 +233,72 @@ export const inventoryAPI = {
     return response.data;
   },
 };
-
 export const scheduleAPI = {
-  getAllSchedules: async (page = 1, limit = 10, date?: string): Promise<ScheduleApiResponse> => {
-    const response = await api.get<ScheduleApiResponse>("/schedules", { params: { page, limit, date } });
+  getScheduleStats: async (): Promise<ApiResponse<ScheduleStatsApiResponse>> => {
+    const response = await api.get("/schedules/stats");
     return response.data;
   },
-  createSchedule: async (scheduleData: Omit<ScheduleData, '_id'>): Promise<ApiResponse<ScheduleData>> => {
+  getAllSchedules: async (page = 1, limit = 10, date?: string, search?: string): Promise<ScheduleApiResponse> => {
+    const response = await api.get<ScheduleApiResponse>("/schedules", { params: { page, limit, date, search } });
+    return response.data;
+  },
+  createSchedule: async (scheduleData: ScheduleFormData): Promise<ApiResponse<ScheduleData>> => { 
     const response = await api.post<ApiResponse<ScheduleData>>("/schedules", scheduleData);
     return response.data;
   },
-  updateSchedule: async (id: string, scheduleData: Partial<Omit<ScheduleData, '_id'>>): Promise<ApiResponse<ScheduleData>> => {
+  updateSchedule: async (id: string, scheduleData: Partial<ScheduleFormData>): Promise<ApiResponse<ScheduleData>> => {
     const response = await api.put<ApiResponse<ScheduleData>>(`/schedules/${id}`, scheduleData);
     return response.data;
   },
 };
-
 export const doctorAPI = { 
   getDoctors: async (page = 1, limit = 100, search = "", specialization = "", status = "Active"): Promise<DoctorListApiResponse> => {
     const response = await api.get<DoctorListApiResponse>("/doctors", { params: { page, limit, search, specialization, status } });
     return response.data;
   },
 };
-
-export const polyclinicAPI = {
-  getAllPolyclinics: async (page = 1, limit = 100, search = "", department = ""): Promise<PolyclinicsApiResponse> => {
-    const response = await api.get<PolyclinicsApiResponse>("/polyclinics", { params: { page, limit, search, department } });
+export const notificationAPI = {
+  getNotifications: async (): Promise<ApiResponse<Notification[]>> => {
+    const response = await api.get<ApiResponse<Notification[]>>("/notifications");
     return response.data;
   },
+  markAsRead: async (id: string): Promise<ApiResponse<Notification>> => {
+    const response = await api.put<ApiResponse<Notification>>(`/notifications/${id}/read`);
+    return response.data;
+  },
+  markAllAsRead: async (): Promise<ApiResponse<null>> => {
+    const response = await api.put<ApiResponse<null>>(`/notifications/mark-all-read`);
+    return response.data;
+  },
+  removeNotification: async (id: string): Promise<ApiResponse<null>> => {
+    const response = await api.delete<ApiResponse<null>>(`/notifications/${id}`);
+    return response.data;
+  },
+}
+
+// --- DIUBAH: Memperbarui polyclinicAPI secara keseluruhan ---
+export const polyclinicAPI = {
+  getAllPolyclinics: async (page = 1, limit = 10, search = "", department = "", status = ""): Promise<PolyclinicsApiResponse> => {
+    const response = await api.get<PolyclinicsApiResponse>("/polyclinics", { params: { page, limit, search, department, status } });
+    return response.data;
+  },
+  getDepartments: async (): Promise<ApiResponse<string[]>> => {
+    const response = await api.get<ApiResponse<string[]>>("/polyclinics/departments");
+    return response.data;
+  },
+  createPolyclinic: async (data: PolyclinicPayload): Promise<ApiResponse<PolyclinicData>> => {
+    const response = await api.post<ApiResponse<PolyclinicData>>("/polyclinics", data);
+    return response.data;
+  },
+  updatePolyclinic: async (id: string, data: Partial<PolyclinicPayload>): Promise<ApiResponse<PolyclinicData>> => {
+    const response = await api.put<ApiResponse<PolyclinicData>>(`/polyclinics/${id}`, data);
+    return response.data;
+  },
+  deletePolyclinic: async (id: string): Promise<ApiResponse<null>> => {
+    const response = await api.delete<ApiResponse<null>>(`/polyclinics/${id}`);
+    return response.data;
+  }
 };
+// --- Akhir dari perubahan polyclinicAPI ---
 
 export default api;

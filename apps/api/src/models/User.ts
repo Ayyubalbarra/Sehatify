@@ -11,7 +11,7 @@ export interface IUserMethods {
 export interface IUser extends Document, IUserMethods {
   name: string;
   email: string;
-  password?: string; 
+  password?: string;
   role: 'admin' | 'doctor' | 'staff' | 'Super Admin';
   phone?: string;
   specialization?: string;
@@ -22,6 +22,9 @@ export interface IUser extends Document, IUserMethods {
     email: boolean;
     push: boolean;
   };
+  // --- TAMBAHKAN FIELD INI ---
+  hospitalId?: mongoose.Schema.Types.ObjectId;
+  polyclinicId?: mongoose.Schema.Types.ObjectId;
 }
 
 type UserModel = Model<IUser, {}, IUserMethods>;
@@ -39,6 +42,17 @@ const UserSchema: Schema<IUser, UserModel> = new Schema({
   notifications: {
     email: { type: Boolean, default: true },
     push: { type: Boolean, default: true },
+  },
+  // --- TAMBAHKAN FIELD INI ---
+  hospitalId: {
+    type: Schema.Types.ObjectId,
+    ref: 'Hospital',
+    required: false, // Opsional untuk Super Admin
+  },
+  polyclinicId: {
+    type: Schema.Types.ObjectId,
+    ref: 'Polyclinic',
+    required: false, // Wajib hanya untuk role 'doctor'
   },
 }, { timestamps: true });
 

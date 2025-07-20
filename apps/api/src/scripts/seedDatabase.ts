@@ -1,246 +1,303 @@
+//
+// SEHATIFY - DATABASE SEEDER SCRIPT (FINAL VERSION)
+// Jalankan dengan: npm run seed
+//
 import dotenv from 'dotenv';
 dotenv.config();
 
-import dbConnection from "../config/database";
-import Patient from "../models/Patient";
-import User from '../models/User'
-import Polyclinic from "../models/Polyclinic";
-import Schedule from "../models/Schedule";
-import Queue from "../models/Queue";
-import Inventory from "../models/Inventory";
-import Bed from "../models/Bed";
-import Visit from "../models/Visit";
+import mongoose from 'mongoose';
+import dbConnection from '../config/database';
+import PatientUser from '../models/patientUser.model';
+import User from '../models/User';
+import Polyclinic from '../models/Polyclinic';
+import Schedule from '../models/Schedule';
+import Queue from '../models/Queue';
+import Inventory from '../models/Inventory';
+import Bed from '../models/Bed';
+import Visit from '../models/Visit';
+import Hospital from '../models/Hospital';
 
-// Asumsi ModelHelpers ada dan berfungsi
-const ModelHelpers = {
-    generatePolyclinicId: () => `POLI-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-    generateDoctorId: () => `DOC-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-    generatePatientId: () => `PAT-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-    generateItemId: () => `ITEM-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-    generateScheduleId: () => `SCH-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-    generateQueueId: () => `Q-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-    generateVisitId: () => `VIS-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`
-};
-
-export class EnhancedDataSeeder { // <-- Tambahkan 'export' agar bisa diimpor oleh seedRoutes.ts
+class EnhancedDataSeeder {
   private isConnected = false;
 
-  async connect() {
+  private async connect() {
     if (!this.isConnected) {
       await dbConnection.connect();
       this.isConnected = true;
     }
   }
 
-  async disconnect() {
+  private async disconnect() {
     if (this.isConnected) {
       await dbConnection.disconnect();
       this.isConnected = false;
     }
   }
-  
-  async seedAll() {
+
+  public async seedAll() {
     try {
-      console.log("🌱 Starting enhanced database seeding...");
-      await this.connect(); // Hubungkan ke database
+      console.log("🌱 Memulai proses seeding database (versi multi-rumah sakit)...");
+      await this.connect();
       
-      await this.createAdminUser();
       await this.clearAllData();
-      await this.seedPolyclinics();
-      await this.seedDoctors();
-      await this.seedPatients();
-      await this.seedInventory();
-      await this.seedBeds();
-      await this.seedSchedules();
-      await this.seedQueues();
-      await this.seedVisits();
       
-      console.log("✅ Enhanced database seeding completed successfully!");
+      const hospitals = await this.seedHospitals();
+      const allPolyclinics = await this.seedPolyclinics(hospitals);
+      const { allDoctors } = await this.seedUsers(hospitals, allPolyclinics);
+      const allPatients = await this.seedPatients();
+      await this.seedInventory();
+      await this.seedBeds(hospitals, allPatients);
+      const allSchedules = await this.seedSchedules(allDoctors);
+      await this.seedQueues(allSchedules, allPatients);
+      await this.seedVisits(allPatients, allDoctors, allPolyclinics);
+      
+      console.log("✅ Proses seeding database berhasil diselesaikan!");
     } catch (error) {
-      console.error("❌ Error seeding database:", error);
+      console.error("❌ Terjadi kesalahan saat seeding database:", error);
       throw error;
     } finally {
-      await this.disconnect(); // Pastikan untuk diskonek setelah selesai
+      await this.disconnect();
     }
   }
 
-  async createAdminUser() {
-    try {
-      const existingAdmin = await User.findOne({ email: "admin@sehatify.com" });
-      if (!existingAdmin) {
-        console.log("Mencoba membuat admin baru...");
+  private async clearAllData() {
+    console.log("🗑️ Menghapus data lama...");
+    const collections = [ Visit, Queue, Schedule, Bed, Inventory, PatientUser, Polyclinic, Hospital ];
+    for (const model of collections) await model.deleteMany({});
+    const adminUser = await User.findOne({ email: "admin@sehatify.com" });
+    await User.deleteMany(adminUser ? { _id: { $ne: adminUser._id } } : {});
+    console.log("✅ Data lama berhasil dibersihkan.");
+  }
 
-        const adminUser = new User({
-          name: "Administrator",
-          email: "admin@sehatify.com",
-          password: "admin123",
-          role: "admin"
-        });
+  private async seedHospitals() {
+    console.log("🏥 Membuat data 3 rumah sakit...");
+    const hospitalsData = [
+        { name: "RS Sehatify Jakarta Pusat", address: "Jl. Jenderal Sudirman No. 123, Jakarta Pusat", phone: "021-1111-2222", email: "info.pusat@sehatify.com" },
+        { name: "RS Sehatify Bekasi", address: "Jl. Ahmad Yani No. 1, Bekasi", phone: "021-3333-4444", email: "info.bekasi@sehatify.com" },
+        { name: "RS Sehatify Bandung", address: "Jl. Asia Afrika No. 50, Bandung", phone: "022-5555-6666", email: "info.bandung@sehatify.com" },
+    ];
+    const hospitals = await Hospital.create(hospitalsData);
+    console.log(`✅ ${hospitals.length} rumah sakit berhasil dibuat.`);
+    return hospitals;
+  }
 
-        await adminUser.save();
-        console.log("✅ Admin user created with the correct hash!");
-      } else {
-        console.log("✅ Admin user already exists");
-      }
-    } catch (error) {
-      console.error("❌ Error creating admin user:", error);
+  private async seedPolyclinics(hospitals: any[]) {
+    console.log("🩺 Membuat data poliklinik untuk setiap rumah sakit...");
+    const polyclinicTemplates = [
+      { name: "Poliklinik Umum", department: "Umum", tarif: 150000 },
+      { name: "Poliklinik Gigi", department: "Gigi", tarif: 250000 },
+      { name: "Poliklinik Anak", department: "Anak", tarif: 200000 },
+    ];
+    let allCreatedPolyclinics = [];
+
+    for (const hospital of hospitals) {
+        const polyclinicsToCreate = polyclinicTemplates.map(p => ({
+            ...p,
+            name: `${p.name} (${hospital.name.split(' ')[2]})`,
+            hospitalId: hospital._id
+        }));
+        const created = await Polyclinic.create(polyclinicsToCreate);
+        allCreatedPolyclinics.push(...created);
     }
+    
+    console.log(`✅ ${allCreatedPolyclinics.length} poliklinik berhasil dibuat.`);
+    return allCreatedPolyclinics;
   }
+  
+  private async seedUsers(hospitals: any[], allPolyclinics: any[]) {
+    console.log("👨‍⚕️ Membuat data pengguna (admin, dokter, staf)...");
+    let allCreatedUsers = [];
 
-  async clearAllData() {
-    console.log("🗑️ Clearing existing data...");
-    await Promise.all([
-      Visit.deleteMany({}),
-      Queue.deleteMany({}),
-      Schedule.deleteMany({}),
-      Bed.deleteMany({}),
-      Inventory.deleteMany({}),
-      Patient.deleteMany({}),
-      Doctor.deleteMany({}),
-      Polyclinic.deleteMany({}),
-    ]);
-    console.log("✅ All data cleared");
-  }
+    const adminExists = await User.findOne({ email: "admin@sehatify.com" });
+    if (!adminExists) {
+        const admin = await User.create({ name: "Ayyub Albarra", email: "admin@sehatify.com", password: "password123", role: "Super Admin", isActive: true });
+        allCreatedUsers.push(admin);
+        console.log("🔑 Admin utama berhasil dibuat.");
+    }
 
-  async seedPolyclinics() {
-    const polyclinics = [
-        { name: "Poliklinik Umum", department: "Umum" },
-        { name: "Poliklinik Jantung", department: "Jantung" },
-        { name: "Poliklinik Anak", department: "Anak" },
-        { name: "Poliklinik Mata", department: "Mata" },
-        { name: "Poliklinik Gigi", department: "Gigi" },
+    const userTemplates = [
+      { name: "Staff Pendaftaran", role: "staff" },
+      { name: "dr. Budi Santoso", role: "doctor", specialization: "Umum" },
+      { name: "drg. Citra Lestari", role: "doctor", specialization: "Gigi" },
+      { name: "dr. Dian Anggraini, Sp.A", role: "doctor", specialization: "Anak" },
     ];
-    await Polyclinic.create(polyclinics.map(p => ({...p, polyclinicId: ModelHelpers.generatePolyclinicId(), description: `Pelayanan ${p.name}`, isActive: true })));
-    console.log("✅ Polyclinics seeded");
-  }
 
-  async seedDoctors() {
-    const doctors = [
-        { employeeId: "EMP-001", name: "Dr. Ahmad Wijaya", specialization: "Umum", title: "dr." },
-        { employeeId: "EMP-002", name: "Dr. Sarah Putri, Sp.JP", specialization: "Spesialis Jantung", title: "dr. Sp.JP" },
-        { employeeId: "EMP-003", name: "Dr. Budi Santoso, Sp.A", specialization: "Spesialis Anak", title: "dr. Sp.A" },
-        { employeeId: "EMP-004", name: "Dr. Lisa Maharani, Sp.M", specialization: "Spesialis Mata", title: "dr. Sp.M" },
-    ];
-    await Doctor.create(doctors.map(d => ({...d, doctorId: ModelHelpers.generateDoctorId(), licenseNumber: `STR${d.employeeId}`, joinDate: new Date(), phone: '08123456789', email: `${d.name.split(' ')[1].toLowerCase()}@sehatify.com`, status: 'Active' })));
-    console.log("✅ Doctors seeded");
-  }
+    for (const hospital of hospitals) {
+        for (const userTemplate of userTemplates) {
+            const location_suffix = hospital.name.split(' ')[2].toLowerCase();
+            
+            let email;
+            if (userTemplate.role === 'doctor') {
+                const namePart = userTemplate.name.split(' ')[1].replace(',', '').toLowerCase();
+                email = `${namePart}.${location_suffix}@sehatify.com`;
+            } else {
+                email = `${userTemplate.role}.${location_suffix}@sehatify.com`;
+            }
 
-  async seedPatients() {
-    const patients = [
-        { nik: "3201234567890001", name: "Andi Pratama", gender: "Laki-laki" },
-        { nik: "3201234567890002", name: "Sari Dewi", gender: "Perempuan" },
-        { nik: "3201234567890003", name: "Rudi Hermawan", gender: "Laki-laki" },
-    ];
-    await Patient.create(patients.map(p => ({...p, patientId: ModelHelpers.generatePatientId(), dateOfBirth: new Date("1990-01-01"), phone: '08123456789', address: 'Jl. Sehat No. 1', emergencyContact: { name: 'Keluarga', relationship: 'Keluarga', phone: '08123456789' } })));
-    console.log("✅ Patients seeded");
-  }
+            const isDoctor = userTemplate.role === 'doctor';
+            const polyclinic = isDoctor ? allPolyclinics.find(p => p.hospitalId.equals(hospital._id) && p.department === userTemplate.specialization) : null;
+            
+            if (isDoctor && !polyclinic) continue;
 
-  async seedInventory() {
-    const inventoryItems = [
-        { name: "Paracetamol 500mg", category: "Obat", unit: "tablet", unitPrice: 500 },
-        { name: "Syringe 5ml", category: "Alat Medis", unit: "pcs", unitPrice: 2500 },
-        { name: "Amoxicillin 500mg", category: "Obat", unit: "tablet", unitPrice: 1200 },
-        { name: "Masker Medis", category: "Alat Pelindung", unit: "pcs", unitPrice: 1500 },
-    ];
-    await Inventory.create(inventoryItems.map(i => ({...i, itemId: ModelHelpers.generateItemId(), currentStock: 500, minimumStock: 100, maximumStock: 2000, supplier: 'PT. Sehat Farma' })));
-    console.log("✅ Inventory seeded");
-  }
-
-  async seedBeds() {
-    const beds = [
-        { ward: "ICU", roomNumber: "ICU-001", bedNumber: "001", bedType: "ICU", status: "available", dailyRate: 2000000 },
-        { ward: "General Ward", roomNumber: "GW-101", bedNumber: "101", bedType: "Standard", status: "available", dailyRate: 500000 },
-        { ward: "VIP", roomNumber: "VIP-001", bedNumber: "001", bedType: "VIP", status: "occupied", dailyRate: 1500000 },
-    ];
-    await Bed.create(beds);
-    console.log("✅ Beds seeded");
-  }
-
-  async seedSchedules() {
-    const doctors = await Doctor.find();
-    const polyclinics = await Polyclinic.find();
-    if (doctors.length === 0 || polyclinics.length === 0) return;
-    const schedules = [];
-    const today = new Date();
-    for (let i = 0; i < 7; i++) {
-        const scheduleDate = new Date(today);
-        scheduleDate.setDate(today.getDate() + i);
-        if (scheduleDate.getDay() === 0) continue;
-        for (const doctor of doctors) {
-            const polyclinic = polyclinics.find(p => p.name.includes(doctor.specialization.split(' ')[1] || 'Umum'));
-            if(polyclinic) schedules.push({ doctorId: doctor._id, polyclinicId: polyclinic._id, date: scheduleDate, startTime: "08:00", endTime: "15:00", totalSlots: 20, bookedSlots: 0, availableSlots: 20, status: "Active"});
+            const user = await User.create({
+                ...userTemplate,
+                name: `${userTemplate.name} (${location_suffix.charAt(0).toUpperCase() + location_suffix.slice(1)})`,
+                email, password: "password123", hospitalId: hospital._id,
+                polyclinicId: polyclinic?._id, isActive: true,
+            });
+            allCreatedUsers.push(user);
         }
     }
-    await Schedule.create(schedules.map(s => ({...s, scheduleId: ModelHelpers.generateScheduleId() })));
-    console.log("✅ Schedules seeded");
+    
+    console.log(`✅ ${allCreatedUsers.length} pengguna berhasil dibuat.`);
+    return {
+      allDoctors: allCreatedUsers.filter(u => u.role === 'doctor'),
+      allStaff: allCreatedUsers.filter(u => u.role === 'staff'),
+    };
+  }
+  
+  private async seedPatients() {
+    console.log("🧍 Membuat data pasien...");
+    const firstNames = ["Ahmad", "Budi", "Citra", "Dewi", "Eko", "Fajar", "Gita", "Hasan", "Indah", "Joko"];
+    const lastNames = ["Santoso", "Wijaya", "Lestari", "Pratama", "Nugroho", "Setiawan", "Kusuma", "Halim"];
+    const patientsData = Array.from({ length: 20 }, (_, i) => ({
+        fullName: `${firstNames[i % firstNames.length]} ${lastNames[i % lastNames.length]}`,
+        email: `pasien${i + 1}@example.com`,
+        phone: `0812100020${i.toString().padStart(2, '0')}`,
+        password: "password123",
+        dateOfBirth: new Date(1970 + Math.floor(Math.random() * 40), Math.floor(Math.random() * 12), Math.floor(Math.random() * 28) + 1),
+        address: `Jl. Sehat Sejahtera No. ${i + 1}, Jakarta`
+    }));
+    const patients = await PatientUser.create(patientsData);
+    console.log(`✅ ${patients.length} pasien berhasil dibuat.`);
+    return patients;
+  }
+  
+  private async seedInventory() {
+    console.log("📦 Membuat data inventaris (global)...");
+    const inventoryData = [
+      { name: "Paracetamol 500mg", category: "Obat", currentStock: 200, minimumStock: 50, unit: "tablet", unitPrice: 500 },
+      { name: "Amoxicillin 500mg", category: "Obat", currentStock: 45, minimumStock: 50, unit: "kapsul", unitPrice: 1500 },
+      { name: "Masker Medis N95", category: "Alkes", currentStock: 500, minimumStock: 100, unit: "pcs", unitPrice: 2500 },
+      { name: "Darah O+", category: "Darah", currentStock: 8, minimumStock: 10, unit: "kantong", unitPrice: 360000 },
+    ];
+    await Inventory.create(inventoryData);
+    console.log(`✅ ${inventoryData.length} item inventaris berhasil dibuat.`);
   }
 
-  async seedQueues() {
-    const schedules = await Schedule.find({ date: { $gte: new Date().setHours(0,0,0,0) } }).limit(2);
-    const patients = await Patient.find();
-    if(schedules.length === 0 || patients.length === 0) return;
-    const queues = [];
-    for(const schedule of schedules) {
-      for (let i = 0; i < 3; i++) {
-          if(!patients[i]) continue;
-          queues.push({ patientId: patients[i]._id, doctorId: schedule.doctorId, polyclinicId: schedule.polyclinicId, scheduleId: schedule._id, queueNumber: i + 1, queueDate: schedule.date, status: "Waiting" });
+  private async seedBeds(hospitals: any[], patients: any[]) {
+    console.log("🛏️ Membuat data tempat tidur...");
+    let allCreatedBeds = [];
+    const bedTemplates = [
+      { ward: "General Ward", roomNumber: "201", bedNumber: "A", bedType: "Standard", dailyRate: 500000 },
+      { ward: "General Ward", roomNumber: "201", bedNumber: "B", bedType: "Standard", dailyRate: 500000 },
+      { ward: "VIP", roomNumber: "301", bedNumber: "A", bedType: "VIP", dailyRate: 1500000 },
+    ];
+    
+    let patientIndex = 0;
+    for (const hospital of hospitals) {
+        const hospitalSuffix = hospital.name.split(' ')[2].substring(0, 3).toUpperCase();
+        
+        const bedsToCreate = bedTemplates.map(b => {
+            const isOccupied = Math.random() > 0.5;
+            const bed = { ...b, roomNumber: `${b.roomNumber}-${hospitalSuffix}`, hospitalId: hospital._id, status: isOccupied ? 'occupied' : 'available', currentPatient: isOccupied ? patients[patientIndex % patients.length]._id : null };
+            if(isOccupied) patientIndex++;
+            return bed;
+        });
+        const created = await Bed.create(bedsToCreate);
+        allCreatedBeds.push(...created);
+    }
+    console.log(`✅ ${allCreatedBeds.length} tempat tidur berhasil dibuat.`);
+  }
+  
+  private async seedSchedules(doctors: any[]) {
+    console.log("🗓️ Membuat data jadwal dokter...");
+    const schedules = [];
+    const today = new Date();
+    const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+
+    for (let i = -7; i <= 7; i++) {
+      const scheduleDate = new Date();
+      scheduleDate.setDate(today.getDate() + i);
+      if (scheduleDate.getDay() === 0) continue; 
+
+      for (const doctor of doctors) {
+        if (!doctor.polyclinicId || Math.random() > 0.8) continue;
+        schedules.push({
+          doctorId: doctor._id, polyclinicId: doctor.polyclinicId,
+          dayOfWeek: days[scheduleDate.getDay()], date: scheduleDate,
+          startTime: (Math.random() > 0.5 ? "09:00" : "14:00"), endTime: (Math.random() > 0.5 ? "12:00" : "17:00"),
+          quota: 20, status: "Active"
+        });
       }
     }
-    await Queue.create(queues.map(q => ({...q, queueId: ModelHelpers.generateQueueId() })));
-    console.log("✅ Queues seeded");
+    const createdSchedules = await Schedule.create(schedules);
+    console.log(`✅ ${createdSchedules.length} jadwal berhasil dibuat.`);
+    return createdSchedules;
   }
-
-  async seedVisits() {
-    const patients = await Patient.find();
-    const doctors = await Doctor.find();
-    const polyclinics = await Polyclinic.find();
-    
-    if (patients.length === 0 || doctors.length === 0 || polyclinics.length === 0) {
-        console.log("⚠️ Skipping visit seeding due to missing patient, doctor, or polyclinic data.");
+  
+  // --- PERBAIKAN UTAMA DI FUNGSI INI ---
+  private async seedQueues(schedules: any[], patients: any[]) {
+    console.log("🚶 Membuat data antrean...");
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const upcomingSchedules = schedules.filter(s => s.date >= today);
+    if (upcomingSchedules.length === 0 || patients.length === 0) {
+        console.log("🟡 Tidak ada jadwal mendatang atau pasien untuk dibuatkan antrean.");
         return;
     }
 
-    const visits = [];
-    for (let i = 0; i < 15; i++) {
-      const randomPatient = patients[Math.floor(Math.random() * patients.length)];
-      const randomDoctor = doctors[Math.floor(Math.random() * doctors.length)];
-      const randomPolyclinic = polyclinics[Math.floor(Math.random() * polyclinics.length)];
-
-      visits.push({
-        patientId: randomPatient._id,
-        doctorId: randomDoctor._id,
-        polyclinicId: randomPolyclinic._id,
-        visitDate: new Date(),
-        visitType: "Consultation",
-        status: "Completed",
-        chiefComplaint: "Konsultasi rutin.",
-        diagnosis: { primary: "Observasi" },
-        treatment: "Tidak ada tindakan khusus.",
-        prescription: [{ 
-            medication: "Vitamin D3 1000 IU", 
-            dosage: "1x1", 
-            frequency: "Sehari", 
-            duration: "30 hari" 
-        }],
-        totalCost: 250000,
-        paymentStatus: "Paid",
-      });
+    const queues = [];
+    for (let i = 0; i < 30; i++) {
+        const patient = patients[i % patients.length];
+        const schedule = upcomingSchedules[i % upcomingSchedules.length];
+        
+        // Menambahkan field yang hilang
+        queues.push({
+            patientId: patient._id,
+            doctorId: schedule.doctorId,
+            polyclinicId: schedule.polyclinicId,
+            scheduleId: schedule._id,
+            queueDate: schedule.date,
+            status: "Waiting",
+            appointmentTime: schedule.startTime, // <-- Ditambahkan
+            createdBy: patient._id,             // <-- Ditambahkan
+        });
     }
+    await Queue.create(queues);
+    console.log(`✅ ${queues.length} antrean berhasil dibuat.`);
+  }
+  
+  private async seedVisits(patients: any[], doctors: any[], polyclinics: any[]) {
+    console.log("📝 Membuat data riwayat kunjungan...");
+    const visits = [];
+    const visitTypes = ["Consultation", "Follow-up", "Emergency", "Check-up", "Treatment"];
+    for (let i = 0; i < 200; i++) {
+      const visitDate = new Date();
+      visitDate.setDate(visitDate.getDate() - Math.floor(Math.random() * 180));
+      
+      const patient = patients[i % patients.length];
+      const doctor = doctors[i % doctors.length];
+      const polyclinic = polyclinics.find(p => p._id.equals(doctor.polyclinicId));
 
-    await Visit.create(visits.map(v => ({...v, visitId: ModelHelpers.generateVisitId() })));
-    console.log("✅ Visits seeded");
+      if (patient && doctor && polyclinic) {
+        visits.push({
+          patientId: patient._id, doctorId: doctor._id, polyclinicId: doctor.polyclinicId,
+          visitDate: visitDate, visitType: visitTypes[i % visitTypes.length],
+          status: "Completed", totalCost: polyclinic.tarif + (Math.floor(Math.random() * 10) * 50000),
+          paymentStatus: "Paid",
+        });
+      }
+    }
+    await Visit.create(visits);
+    console.log(`✅ ${visits.length} riwayat kunjungan berhasil dibuat.`);
   }
 }
 
-// Hapus fungsi runSeeder() yang lama
-// gantikan dengan blok kondisional di bawah
-
-// -- PERBAIKAN UTAMA --
-// Blok ini memastikan kode hanya berjalan saat dipanggil via `npm run seed`
 if (require.main === module) {
   const seeder = new EnhancedDataSeeder();
   seeder.seedAll().catch(error => {
-    console.error("❌ Seeding script failed to run:", error);
+    console.error("❌ Gagal menjalankan skrip seeding:", error);
     process.exit(1);
   });
 }
